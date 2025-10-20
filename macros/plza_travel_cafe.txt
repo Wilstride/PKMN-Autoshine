@@ -1,6 +1,6 @@
 # Open game map
 PRESS plus
-SLEEP 0.2
+SLEEP 0.15
 
 # Flick stick
 STICK l 0.0 1.0
@@ -8,7 +8,7 @@ SLEEP 0.02
 STICK l 0.0 0.0
 
 # Snap to fast travel icon
-SLEEP 0.25
+SLEEP 0.28
 
 # Select flight
 PRESS a
