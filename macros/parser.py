@@ -229,13 +229,42 @@ class MacroRunner:
             return
         self._stop_event.clear()
         self._pause_event.set()
-        self._task = asyncio.create_task(run_commands(self.adapter, self._commands, log_queue=self.log_queue, pause_event=self._pause_event, stop_event=self._stop_event))
+        # run continuously until stopped
+        async def _loop():
+            iteration = 0
+            while not self._stop_event.is_set():
+                iteration += 1
+                try:
+                    if self.log_queue is not None:
+                        try:
+                            self.log_queue.put_nowait(f'=== iteration {iteration} start ===')
+                        except Exception:
+                            pass
+                    await run_commands(self.adapter, self._commands, log_queue=self.log_queue, pause_event=self._pause_event, stop_event=self._stop_event)
+                except Exception as e:
+                    # log and continue loop unless stop requested
+                    if self.log_queue is not None:
+                        try:
+                            self.log_queue.put_nowait(f'Error during macro run: {e}')
+                        except Exception:
+                            pass
+                    else:
+                        print(f'Error during macro run: {e}')
+                # small delay between iterations to avoid tight loop
+                await asyncio.sleep(0.1)
+
+        self._task = asyncio.create_task(_loop())
 
     async def stop(self):
         if not self.is_running():
             return
         self._stop_event.set()
-        await self._task
+        # resume if paused so the loop can exit promptly
+        self._pause_event.set()
+        try:
+            await self._task
+        finally:
+            self._task = None
 
     def pause(self):
         self._pause_event.clear()
