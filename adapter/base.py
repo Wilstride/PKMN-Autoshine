@@ -50,5 +50,10 @@ class BaseAdapter(abc.ABC):
         """Press a button for `duration` seconds. `btn` may be a `Button` enum or a string."""
 
     @abc.abstractmethod
-    async def stick(self, stick: Stick = Stick.L_STICK, h: int = 0x07FF, v: int = 0x07FF) -> None:
-        """Move the chosen stick to horizontal `h` and vertical `v` and send the state."""
+    async def stick(self, stick: Stick = Stick.L_STICK, h: Union[int, float] = 0x0800, v: Union[int, float] = 0x0800) -> None:
+        """Move the chosen stick to horizontal `h` and vertical `v` and send the state.
+
+        `h` and `v` can be raw 12-bit ints (0..0xFFF) or normalized floats in
+        the range [-1.0, 1.0] where -1 is full negative, 0 is center, +1 is
+        full positive. Implementations must accept both styles.
+        """

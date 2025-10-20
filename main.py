@@ -23,7 +23,22 @@ async def main():
 
     # Go to Game
     await adapter.press(Button.HOME)
-    await adapter.stick(Stick.L_STICK, h=0x07FF, v=0x0FFF)  # Up
+    await asyncio.sleep(0.5)
+    await adapter.press(Button.HOME)
+    await asyncio.sleep(0.5)
+    # Using normalized inputs in [-1.0..1.0]
+    await adapter.stick(Stick.L_STICK, h=0.0, v=1.0) # Up
+    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK))
+    await asyncio.sleep(0.5)
+    await adapter.stick(Stick.L_STICK, h=1.0, v=0.0) # Right
+    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK))
+    await asyncio.sleep(0.5)
+    await adapter.stick(Stick.L_STICK, h=0.0, v=-1.0) # Down
+    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK))
+    await asyncio.sleep(0.5)
+    await adapter.stick(Stick.L_STICK, h=-1.0, v=0.0) # Left
+    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK))
+    await asyncio.sleep(5)
 
     #count = 0
     #start = time.time()
