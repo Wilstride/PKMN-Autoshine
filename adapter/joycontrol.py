@@ -2,7 +2,7 @@
 import asyncio
 from typing import Union
 
-from .base import BaseAdapter, Button
+from .base import BaseAdapter, Button, Stick
 
 from joycontrol.protocol import controller_protocol_factory
 from joycontrol.server import create_hid_server
