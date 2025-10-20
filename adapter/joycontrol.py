@@ -66,17 +66,24 @@ class JoycontrolAdapter(BaseAdapter):
         def to_raw(axis_val, cal_center, cal_above, cal_below):
             # if user passed an int, assume it's already raw
             if isinstance(axis_val, int):
-                return axis_val
-            # clamp
-            v = float(axis_val)
-            if v < -1.0:
-                v = -1.0
-            if v > 1.0:
-                v = 1.0
-            if v >= 0:
-                return int(round(cal_center + v * cal_above))
+                raw = axis_val
+                return max(0, min(0x0FFF, int(raw)))
+
+            # clamp input percentage
+            v_pct = float(axis_val)
+            if v_pct < -1.0:
+                v_pct = -1.0
+            if v_pct > 1.0:
+                v_pct = 1.0
+
+            # cal_above and cal_below are positive spans
+            if v_pct >= 0:
+                raw = cal_center + v_pct * cal_above
             else:
-                return int(round(cal_center + v * cal_below))
+                raw = cal_center + v_pct * cal_below  # v_pct negative -> subtract
+
+            raw_i = int(round(raw))
+            return max(0, min(0x0FFF, raw_i))
 
         if stick == Stick.L_STICK:
             s = getattr(self._ctrl, 'l_stick_state', None)
@@ -94,23 +101,28 @@ class JoycontrolAdapter(BaseAdapter):
         except Exception:
             cal = None
 
-        # fallback symmetric center/mid if no calibration
+        # horizontal calibration
         if cal is None:
-            center = 0x0800
-            above = 0x07FF
-            below = -0x07FF
-            # below should be negative to represent offset from center
-            # Note: we store below as positive in calibration; convert
-            cal_center = center
-            cal_above = above
-            cal_below = -above
+            h_center = 0x0800
+            h_above = 0x07FF
+            h_below = 0x07FF
         else:
-            cal_center = cal.h_center
-            cal_above = cal.h_max_above_center
-            cal_below = -cal.h_max_below_center
+            h_center = cal.h_center
+            h_above = cal.h_max_above_center
+            h_below = cal.h_max_below_center
 
-        raw_h = to_raw(h, cal_center, cal_above, cal_below)
-        raw_v = to_raw(v, cal_center, cal_above, cal_below)
+        # vertical calibration
+        if cal is None:
+            v_center = 0x0800
+            v_above = 0x07FF
+            v_below = 0x07FF
+        else:
+            v_center = cal.v_center
+            v_above = cal.v_max_above_center
+            v_below = cal.v_max_below_center
+
+        raw_h = to_raw(h, h_center, h_above, h_below)
+        raw_v = to_raw(v, v_center, v_above, v_below)
 
         # set and send
         s.set_h(raw_h)
@@ -145,5 +157,22 @@ class JoycontrolAdapter(BaseAdapter):
             return None
         try:
             return s.get_calibration()
+        except Exception:
+            return None
+
+    def stick_bytes(self, stick: Stick = Stick.L_STICK):
+        """Return the 3-byte packed representation for the chosen stick or None."""
+        if self._ctrl is None:
+            return None
+
+        if stick == Stick.L_STICK:
+            s = getattr(self._ctrl, 'l_stick_state', None)
+        else:
+            s = getattr(self._ctrl, 'r_stick_state', None)
+
+        if s is None:
+            return None
+        try:
+            return bytes(s)
         except Exception:
             return None
