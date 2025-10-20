@@ -1,19 +1,19 @@
 # Open game map
 PRESS plus
-SLEEP 0.3
+SLEEP 0.2
 
 # Flick stick
-STICK l up
-SLEEP 0.05
-STICK l center
+STICK l 0.0 1.0
+SLEEP 0.02
+STICK l 0.0 0.0
 
 # Snap to fast travel icon
-SLEEP 0.2
+SLEEP 0.25
 
 # Select flight
 PRESS a
-SLEEP 0.3
+SLEEP 0.5
 PRESS a
 
 # Wait for loading screen
-SLEEP 3
+SLEEP 3.25

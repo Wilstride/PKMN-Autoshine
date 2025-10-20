@@ -3,6 +3,7 @@ import asyncio
 import time
 from adapter.joycontrol import JoycontrolAdapter
 from adapter.base import Button, Stick
+from macros.parser import parse_macro, run_macro
 
 logging.basicConfig(
     level=logging.DEBUG,           # Show DEBUG messages and above
@@ -15,46 +16,27 @@ async def _create_adapter():
     return adapter
 
 async def main():
-    # Select hunt methodology    
-    #hunt_function = cafe_hunt # can be either cafe_hunt(ctrl) or wild_area(ctrl)
-    
     # Create and connect controller adapter
     adapter = await _create_adapter()
 
-    # Go to Game
-    await adapter.press(Button.HOME)
-    await asyncio.sleep(0.5)
-    await adapter.press(Button.HOME)
-    await asyncio.sleep(0.5)
-    # Using normalized inputs in [-1.0..1.0]
-    await adapter.stick(Stick.L_STICK, h=0.0, v=1.0) # Up
-    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK), 'bytes:', adapter.stick_bytes(Stick.L_STICK))
-    await asyncio.sleep(0.5)
-    await adapter.stick(Stick.L_STICK, h=1.0, v=0.0) # Right
-    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK), 'bytes:', adapter.stick_bytes(Stick.L_STICK))
-    await asyncio.sleep(0.5)
-    await adapter.stick(Stick.L_STICK, h=0.0, v=-1.0) # Down
-    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK), 'bytes:', adapter.stick_bytes(Stick.L_STICK))
-    await asyncio.sleep(0.5)
-    await adapter.stick(Stick.L_STICK, h=-1.0, v=0.0) # Left
-    print('stick:', adapter.get_stick(Stick.L_STICK), 'cal:', adapter.get_calibration(Stick.L_STICK), 'bytes:', adapter.stick_bytes(Stick.L_STICK))
-    await asyncio.sleep(5)
+    # Load and run system_open_game macro
+    with open('macros/system_open_game.txt') as text:
+        commands = parse_macro(text.read())
+    await run_macro(adapter, commands)
 
-    #count = 0
-    #start = time.time()
-    #while True:
-    #    try:
-    #        await adapter.press("home")
-#
-    #        count = count + 1
-    #        elapsed = time.time() - start
-    #        print(f"Reset {count} after {round(elapsed, 1)} seconds ({round(elapsed/count, 1)} seconds per reset)")
-    #    except Exception as e:
-    #        logging.warning(f"{e}")
-    #        logging.info("Retrying connection in 3s...")
-    #        await asyncio.sleep(3)
-    #        # wait for the Switch to connect
-    #        await adapter.connect()
+    # Load and run plza_travel_cafe macro
+    with open('macros/plza_travel_cafe.txt') as text:
+        commands = parse_macro(text.read())
+
+    print(commands)
+    # Repeatedly run the travel cafe macro and log resets
+    count = 0
+    start = time.time()
+    while True:
+        await run_macro(adapter, commands)
+        count = count + 1
+        elapsed = time.time() - start
+        print(f"Reset {count} after {round(elapsed, 2)} seconds ({round(elapsed/count, 2)} spr)")
 
 # run the async main function
 asyncio.run(main())
