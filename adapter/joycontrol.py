@@ -7,7 +7,7 @@ from .base import BaseAdapter, Button, Stick
 from joycontrol.protocol import controller_protocol_factory
 from joycontrol.server import create_hid_server
 from joycontrol.controller import Controller
-
+from joycontrol.controller_state import _StickCalibration
 
 class JoycontrolAdapter(BaseAdapter):
     """Adapter that implements controller actions using the bundled joycontrol.
