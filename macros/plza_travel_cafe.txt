@@ -12,7 +12,7 @@ SLEEP 0.28
 
 # Select flight
 PRESS a
-SLEEP 0.5
+SLEEP 0.55
 PRESS a
 
 # Wait for loading screen
