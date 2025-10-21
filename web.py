@@ -9,13 +9,14 @@ import threading
 import queue
 from aiohttp import web, WSMsgType
 import pathlib
+from typing import Optional
 import json
 import argparse
 import logging
 import traceback
 
 from adapter.joycontrol import JoycontrolAdapter
-from macros.parser import parse_macro, MacroRunner
+from macro_parser import parse_macro, MacroRunner
 
 logging.basicConfig(
     level=logging.DEBUG,           # Show DEBUG messages and above
@@ -37,6 +38,7 @@ INDEX_HTML = '''
   <button id="pause">Pause</button>
   <button id="resume">Resume</button>
   <button id="restart">Restart</button>
+    <button id="stop">Stop</button>
   <div id="status">Status: idle</div>
   <div id="log"></div>
     <hr>
@@ -68,6 +70,10 @@ function send(cmd){ ws.send(JSON.stringify({cmd:cmd})); }
 document.getElementById('pause').onclick = ()=>send('pause');
 document.getElementById('resume').onclick = ()=>send('resume');
 document.getElementById('restart').onclick = ()=>send('restart');
+document.getElementById('stop').onclick = async ()=>{
+    // ask server to stop completely
+    await fetch('/api/stop', {method:'POST'});
+}
 // Macro UI helpers
 async function listMacros(){
     let res = await fetch('/api/macros');
@@ -199,7 +205,21 @@ async def api_select_macro(request):
     return web.Response(status=200)
 
 
-async def worker_main(macro_file: str, cmd_q: 'queue.Queue', logs_qs: list):
+async def api_stop(request):
+    # signal worker stop and also server shutdown
+    cmd_q: 'queue.Queue' = request.app['cmd_q']
+    try:
+        cmd_q.put('stop')
+    except Exception:
+        pass
+    # set shutdown event so start_server can exit
+    ev: asyncio.Event = request.app.get('shutdown_event')
+    if ev is not None:
+        ev.set()
+    return web.Response(status=200)
+
+
+async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: list):
     """Worker coroutine to run in its own asyncio loop (in a thread).
 
     It creates the adapter and MacroRunner and forwards runner logs into the
@@ -215,8 +235,32 @@ async def worker_main(macro_file: str, cmd_q: 'queue.Queue', logs_qs: list):
                 except Exception:
                     pass
 
-        text = open(macro_file).read()
-        commands = parse_macro(text)
+        # load initial macro if provided, otherwise start with empty command list
+        commands = []
+        if macro_file:
+            try:
+                p = pathlib.Path(macro_file)
+                if p.exists():
+                    text = p.read_text()
+                    commands = parse_macro(text)
+                else:
+                    for q in logs_qs:
+                        try:
+                            q.put_nowait(f'Initial macro not found: {macro_file}')
+                        except Exception:
+                            try:
+                                q.put(f'Initial macro not found: {macro_file}')
+                            except Exception:
+                                pass
+            except Exception as e:
+                for q in logs_qs:
+                    try:
+                        q.put_nowait(f'Error reading initial macro {macro_file}: {e}')
+                    except Exception:
+                        try:
+                            q.put(f'Error reading initial macro {macro_file}: {e}')
+                        except Exception:
+                            pass
         for q in logs_qs:
             try:
                 q.put_nowait(f'worker: parsed {len(commands)} commands')
@@ -349,7 +393,7 @@ async def worker_main(macro_file: str, cmd_q: 'queue.Queue', logs_qs: list):
 
 
 
-async def start_server(macro_file: str, host: str='0.0.0.0', port: int=8080):
+async def start_server(macro_file: Optional[str], host: str='0.0.0.0', port: int=8080):
     # Create thread-safe command and log queues and start worker thread
     cmd_q: 'queue.Queue' = queue.Queue()
     logs_term_q: 'queue.Queue' = queue.Queue()
@@ -376,12 +420,15 @@ async def start_server(macro_file: str, host: str='0.0.0.0', port: int=8080):
     app = web.Application()
     app['cmd_q'] = cmd_q
     app['logs_ws_q'] = logs_ws_q
+    # event set when an external stop is requested (via /api/stop)
+    app['shutdown_event'] = asyncio.Event()
     app.router.add_get('/', index)
     app.router.add_get('/ws', websocket_handler)
     app.router.add_get('/api/macros', api_list_macros)
     app.router.add_get('/api/macros/{name}', api_get_macro)
     app.router.add_post('/api/macros', api_save_macro)
     app.router.add_post('/api/select', api_select_macro)
+    app.router.add_post('/api/stop', api_stop)
 
     # Properly set up AppRunner and TCPSite and keep the server running until
     # cancelled. Use distinct names to avoid shadowing the MacroRunner `runner`.
@@ -391,8 +438,8 @@ async def start_server(macro_file: str, host: str='0.0.0.0', port: int=8080):
     await site.start()
     print(f'Web control running on http://{host}:{port}')
     try:
-        # wait forever until cancelled (e.g., Ctrl-C)
-        await asyncio.Event().wait()
+        # wait until /api/stop sets the shutdown_event (or Ctrl-C)
+        await app['shutdown_event'].wait()
     finally:
         term_logger.cancel()
         # signal worker to stop
@@ -405,7 +452,7 @@ async def start_server(macro_file: str, host: str='0.0.0.0', port: int=8080):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('macro_file')
+    parser.add_argument('macro_file', nargs='?', default=None)
     parser.add_argument('--host', default='0.0.0.0')
     parser.add_argument('--port', type=int, default=8080)
     args = parser.parse_args()

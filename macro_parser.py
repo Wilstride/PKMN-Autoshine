@@ -225,6 +225,15 @@ class MacroRunner:
     async def start(self):
         if self._commands is None:
             raise RuntimeError('No commands set')
+        # If commands is an empty list, do not start the continuous iterator.
+        if isinstance(self._commands, list) and len(self._commands) == 0:
+            # nothing to run; caller can set commands later and call start/restart
+            if self.log_queue is not None:
+                try:
+                    self.log_queue.put_nowait('MacroRunner: no commands to run')
+                except Exception:
+                    pass
+            return
         if self.is_running():
             return
         self._stop_event.clear()

@@ -3,7 +3,7 @@ import asyncio
 import time
 from adapter.joycontrol import JoycontrolAdapter
 from adapter.base import Button, Stick
-from macros.parser import parse_macro, run_macro
+from macro_parser import parse_macro, run_macro
 
 logging.basicConfig(
     level=logging.DEBUG,           # Show DEBUG messages and above
