@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Macro Control</title>
+  <style>body{font-family:monospace;} #log{white-space:pre; background:#111; color:#0f0; padding:1rem; height:60vh; overflow:auto}</style>
+</head>
+<body>
+  <h1>Macro Control</h1>
+  <button id="pause">Pause</button>
+  <button id="resume">Resume</button>
+  <button id="restart">Restart</button>
+  <button id="stop">Stop</button>
+  <div id="status">Status: idle</div>
+  <pre id="macro_details" style="background:#222;color:#0f0;padding:0.5rem;margin-top:0.5rem;font-family:monospace"></pre>
+  <div id="log"></div>
+  <hr>
+  <div>
+    <label for="macro_select">Select macro:</label>
+    <select id="macro_select"></select>
+    <button id="run_macro">Run</button>
+  </div>
+  <div>
+    <h3>Create / Edit Macro</h3>
+    <input id="macro_name" placeholder="filename.txt" />
+    <button id="save_macro">Save</button>
+    <br>
+    <textarea id="macro_editor" style="width:100%;height:200px"></textarea>
+  </div>
+<script>
+async function updateMacroDetails(){
+    try{
+        let res = await fetch('/api/status');
+        if(!res.ok) return;
+        let s = await res.json();
+        document.getElementById('macro_details').textContent = `Macro: ${s.name || '-'}\nRuntime: ${s.runtime || '-'}\nIterations: ${s.iterations||0}\nSec/Iter: ${s.sec_per_iter||'-'}`;
+    }catch(e){console.error(e)}
+}
+setInterval(updateMacroDetails, 2000);
+let ws = new WebSocket('ws://'+location.host+'/ws');
+ws.onopen = ()=>console.log('ws open');
+ws.onmessage = (e)=>{
+    let m = JSON.parse(e.data);
+    if(m.type==='log'){
+        document.getElementById('log').textContent += m.msg + '\n';
+        document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+    } else if(m.type==='status'){
+        document.getElementById('status').textContent = 'Status: '+m.msg;
+    }
+};
+function send(cmd){ ws.send(JSON.stringify({cmd:cmd})); }
+document.getElementById('pause').onclick = ()=>send('pause');
+document.getElementById('resume').onclick = ()=>send('resume');
+document.getElementById('restart').onclick = async ()=>{
+    await fetch('/api/restart_host', {method:'POST'});
+}
+document.getElementById('stop').onclick = async ()=>{
+    await fetch('/api/stop_host', {method:'POST'});
+}
+async function listMacros(){
+    let res = await fetch('/api/macros');
+    if(!res.ok) return;
+    let names = await res.json();
+    let sel = document.getElementById('macro_select');
+    sel.innerHTML = '';
+    names.forEach(n=>{ let o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+}
+document.getElementById('run_macro').onclick = async ()=>{
+    let sel = document.getElementById('macro_select');
+    let name = sel.value;
+    if(!name) return;
+    await fetch('/api/select', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name:name})});
+}
+
+document.getElementById('save_macro').onclick = async ()=>{
+    let name = document.getElementById('macro_name').value;
+    let content = document.getElementById('macro_editor').value;
+    if(!name) return alert('Enter filename');
+    let res = await fetch('/api/macros', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name:name, content:content})});
+    if(res.ok){
+        await listMacros();
+        alert('Saved');
+    } else {
+        alert('Save failed');
+    }
+}
+
+document.getElementById('macro_select').onchange = async ()=>{
+    let name = document.getElementById('macro_select').value;
+    if(!name) return;
+    let res = await fetch('/api/macros/'+encodeURIComponent(name));
+    if(res.ok){
+        let text = await res.text();
+        document.getElementById('macro_editor').value = text;
+        document.getElementById('macro_name').value = name;
+    }
+}
+
+listMacros().catch(e=>console.error(e));
+</script>
+</body>
+</html>
