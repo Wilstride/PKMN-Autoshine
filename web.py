@@ -28,10 +28,18 @@ class MacroStatus:
         self.iterations = 0
         self.last_iter_time = None
         self.sec_per_iter = None
+        # pause tracking
+        self.paused = False
+        self.pause_start = None
+        self.paused_total = 0.0
     def to_dict(self):
         runtime = '-'
         if self.start_time is not None:
-            dt = int(time.time() - self.start_time)
+            now = time.time()
+            total_paused = self.paused_total
+            if self.paused and self.pause_start is not None:
+                total_paused += (now - self.pause_start)
+            dt = int(now - self.start_time - total_paused)
             h, m, s = dt//3600, (dt%3600)//60, dt%60
             runtime = f"{h:02}:{m:02}:{s:02}"
         return {
@@ -411,6 +419,12 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                             pass
                 if cmd == 'pause':
                     try:
+                        # update status paused tracking
+                        try:
+                            app_status.paused = True
+                            app_status.pause_start = time.time()
+                        except Exception:
+                            pass
                         await runner.pause()
                     except Exception as e:
                         for q in logs_qs:
@@ -422,6 +436,14 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                                 except Exception:
                                     pass
                 elif cmd == 'resume':
+                    try:
+                        # update status paused tracking
+                        if app_status.paused and app_status.pause_start is not None:
+                            app_status.paused_total = (app_status.paused_total or 0.0) + (time.time() - app_status.pause_start)
+                        app_status.paused = False
+                        app_status.pause_start = None
+                    except Exception:
+                        pass
                     runner.resume()
                 elif cmd == 'restart':
                     try:
@@ -449,6 +471,18 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         new_commands = parse_macro(text)
                         runner.set_commands(new_commands)
                         await runner.restart()
+                        # reset status for new macro
+                        try:
+                            app_status.name = name
+                            app_status.start_time = None
+                            app_status.iterations = 0
+                            app_status.last_iter_time = None
+                            app_status.sec_per_iter = None
+                            app_status.paused = False
+                            app_status.pause_start = None
+                            app_status.paused_total = 0.0
+                        except Exception:
+                            pass
                         for q in logs_qs:
                             try:
                                 q.put_nowait(f'Loaded macro: {name} ({len(new_commands)} commands)')
