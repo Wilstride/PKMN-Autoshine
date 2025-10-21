@@ -17,6 +17,37 @@ import traceback
 
 from adapter.joycontrol import JoycontrolAdapter
 from macro_parser import parse_macro, MacroRunner
+import subprocess
+import time
+
+
+class MacroStatus:
+    def __init__(self):
+        self.name = None
+        self.start_time = None
+        self.iterations = 0
+        self.last_iter_time = None
+        self.sec_per_iter = None
+        # pause tracking
+        self.paused = False
+        self.pause_start = None
+        self.paused_total = 0.0
+    def to_dict(self):
+        runtime = '-'
+        if self.start_time is not None:
+            now = time.time()
+            total_paused = self.paused_total
+            if self.paused and self.pause_start is not None:
+                total_paused += (now - self.pause_start)
+            dt = int(now - self.start_time - total_paused)
+            h, m, s = dt//3600, (dt%3600)//60, dt%60
+            runtime = f"{h:02}:{m:02}:{s:02}"
+        return {
+            'name': self.name,
+            'runtime': runtime,
+            'iterations': self.iterations,
+            'sec_per_iter': round(self.sec_per_iter, 2) if self.sec_per_iter is not None else None,
+        }
 
 logging.basicConfig(
     level=logging.DEBUG,           # Show DEBUG messages and above
@@ -40,6 +71,7 @@ INDEX_HTML = '''
   <button id="restart">Restart</button>
     <button id="stop">Stop</button>
   <div id="status">Status: idle</div>
+    <pre id="macro_details" style="background:#222;color:#0f0;padding:0.5rem;margin-top:0.5rem;font-family:monospace"></pre>
   <div id="log"></div>
     <hr>
     <div>
@@ -55,6 +87,15 @@ INDEX_HTML = '''
         <textarea id="macro_editor" style="width:100%;height:200px"></textarea>
     </div>
 <script>
+async function updateMacroDetails(){
+    try{
+        let res = await fetch('/api/status');
+        if(!res.ok) return;
+        let s = await res.json();
+        document.getElementById('macro_details').textContent = `Macro: ${s.name || '-'}\nRuntime: ${s.runtime || '-'}\nIterations: ${s.iterations||0}\nSec/Iter: ${s.sec_per_iter||'-'}`;
+    }catch(e){console.error(e)}
+}
+setInterval(updateMacroDetails, 2000);
 let ws = new WebSocket("ws://"+location.host+"/ws");
 ws.onopen = ()=>console.log('ws open');
 ws.onmessage = (e)=>{
@@ -69,10 +110,13 @@ ws.onmessage = (e)=>{
 function send(cmd){ ws.send(JSON.stringify({cmd:cmd})); }
 document.getElementById('pause').onclick = ()=>send('pause');
 document.getElementById('resume').onclick = ()=>send('resume');
-document.getElementById('restart').onclick = ()=>send('restart');
+document.getElementById('restart').onclick = async ()=>{
+    // restart the host system
+    await fetch('/api/restart_host', {method:'POST'});
+}
 document.getElementById('stop').onclick = async ()=>{
-    // ask server to stop completely
-    await fetch('/api/stop', {method:'POST'});
+    // shutdown the host system
+    await fetch('/api/stop_host', {method:'POST'});
 }
 // Macro UI helpers
 async function listMacros(){
@@ -219,7 +263,23 @@ async def api_stop(request):
     return web.Response(status=200)
 
 
-async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: list):
+async def api_restart_host(request):
+    try:
+        subprocess.Popen(['sudo', 'shutdown', '-r', 'now'])
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+    return web.Response(status=200)
+
+
+async def api_stop_host(request):
+    try:
+        subprocess.Popen(['sudo', 'shutdown', '-h', 'now'])
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+    return web.Response(status=200)
+
+
+async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: list, status: Optional[MacroStatus]=None):
     """Worker coroutine to run in its own asyncio loop (in a thread).
 
     It creates the adapter and MacroRunner and forwards runner logs into the
@@ -297,9 +357,13 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                 except Exception:
                     pass
 
+        # bind status object for this worker
+        app_status = status if status is not None else MacroStatus()
+
         runner = MacroRunner(adapter)
         runner.set_commands(commands)
         rlogs = runner.logs()
+        # status object (if provided via closure) will be updated as macros run
 
         async def forward_rlogs():
             while True:
@@ -307,6 +371,29 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                     msg = await rlogs.get()
                 except asyncio.CancelledError:
                     break
+                # update status: iteration and timing
+                try:
+                    if msg.startswith('=== iteration'):
+                        # increment iteration counter in app status
+                        st = app_status
+                        now = time.time()
+                        if st.start_time is None:
+                            st.start_time = now
+                        if st.last_iter_time is not None:
+                            st.sec_per_iter = now - st.last_iter_time
+                        st.last_iter_time = now
+                        st.iterations += 1
+                    if msg.startswith('Loaded macro:'):
+                        # record name
+                        parts = msg.split(':',1)[1].strip().split(' ',1)
+                        st = app_status
+                        st.name = parts[0]
+                        st.start_time = None
+                        st.iterations = 0
+                        st.last_iter_time = None
+                        st.sec_per_iter = None
+                except Exception:
+                    pass
                 for q in logs_qs:
                     try:
                         q.put_nowait(msg)
@@ -331,8 +418,32 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         except Exception:
                             pass
                 if cmd == 'pause':
-                    runner.pause()
+                    try:
+                        # update status paused tracking
+                        try:
+                            app_status.paused = True
+                            app_status.pause_start = time.time()
+                        except Exception:
+                            pass
+                        await runner.pause()
+                    except Exception as e:
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait(f'Error pausing runner: {e}')
+                            except Exception:
+                                try:
+                                    q.put(f'Error pausing runner: {e}')
+                                except Exception:
+                                    pass
                 elif cmd == 'resume':
+                    try:
+                        # update status paused tracking
+                        if app_status.paused and app_status.pause_start is not None:
+                            app_status.paused_total = (app_status.paused_total or 0.0) + (time.time() - app_status.pause_start)
+                        app_status.paused = False
+                        app_status.pause_start = None
+                    except Exception:
+                        pass
                     runner.resume()
                 elif cmd == 'restart':
                     try:
@@ -360,6 +471,18 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         new_commands = parse_macro(text)
                         runner.set_commands(new_commands)
                         await runner.restart()
+                        # reset status for new macro
+                        try:
+                            app_status.name = name
+                            app_status.start_time = None
+                            app_status.iterations = 0
+                            app_status.last_iter_time = None
+                            app_status.sec_per_iter = None
+                            app_status.paused = False
+                            app_status.pause_start = None
+                            app_status.paused_total = 0.0
+                        except Exception:
+                            pass
                         for q in logs_qs:
                             try:
                                 q.put_nowait(f'Loaded macro: {name} ({len(new_commands)} commands)')
@@ -408,11 +531,13 @@ async def start_server(macro_file: Optional[str], host: str='0.0.0.0', port: int
 
     term_logger = asyncio.create_task(terminal_log_printer())
 
+    # status object shared with the worker
+    macro_status = MacroStatus()
     # start worker thread with its own asyncio loop
     def _start_worker():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(worker_main(macro_file, cmd_q, [logs_term_q, logs_ws_q]))
+        loop.run_until_complete(worker_main(macro_file, cmd_q, [logs_term_q, logs_ws_q,], status=macro_status))
 
     worker = threading.Thread(target=_start_worker, daemon=True)
     worker.start()
@@ -420,6 +545,7 @@ async def start_server(macro_file: Optional[str], host: str='0.0.0.0', port: int
     app = web.Application()
     app['cmd_q'] = cmd_q
     app['logs_ws_q'] = logs_ws_q
+    app['macro_status'] = macro_status
     # event set when an external stop is requested (via /api/stop)
     app['shutdown_event'] = asyncio.Event()
     app.router.add_get('/', index)
@@ -429,6 +555,11 @@ async def start_server(macro_file: Optional[str], host: str='0.0.0.0', port: int
     app.router.add_post('/api/macros', api_save_macro)
     app.router.add_post('/api/select', api_select_macro)
     app.router.add_post('/api/stop', api_stop)
+    app.router.add_post('/api/restart_host', api_restart_host)
+    app.router.add_post('/api/stop_host', api_stop_host)
+    async def api_status(request):
+        return web.json_response(request.app['macro_status'].to_dict())
+    app.router.add_get('/api/status', api_status)
 
     # Properly set up AppRunner and TCPSite and keep the server running until
     # cancelled. Use distinct names to avoid shadowing the MacroRunner `runner`.
