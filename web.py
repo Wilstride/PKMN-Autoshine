@@ -17,6 +17,7 @@ import traceback
 
 from adapter.joycontrol import JoycontrolAdapter
 from macro_parser import parse_macro, MacroRunner
+import subprocess
 
 logging.basicConfig(
     level=logging.DEBUG,           # Show DEBUG messages and above
@@ -69,10 +70,13 @@ ws.onmessage = (e)=>{
 function send(cmd){ ws.send(JSON.stringify({cmd:cmd})); }
 document.getElementById('pause').onclick = ()=>send('pause');
 document.getElementById('resume').onclick = ()=>send('resume');
-document.getElementById('restart').onclick = ()=>send('restart');
+document.getElementById('restart').onclick = async ()=>{
+    // restart the host system
+    await fetch('/api/restart_host', {method:'POST'});
+}
 document.getElementById('stop').onclick = async ()=>{
-    // ask server to stop completely
-    await fetch('/api/stop', {method:'POST'});
+    // shutdown the host system
+    await fetch('/api/stop_host', {method:'POST'});
 }
 // Macro UI helpers
 async function listMacros(){
@@ -216,6 +220,22 @@ async def api_stop(request):
     ev: asyncio.Event = request.app.get('shutdown_event')
     if ev is not None:
         ev.set()
+    return web.Response(status=200)
+
+
+async def api_restart_host(request):
+    try:
+        subprocess.Popen(['sudo', 'shutdown', '-r', 'now'])
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+    return web.Response(status=200)
+
+
+async def api_stop_host(request):
+    try:
+        subprocess.Popen(['sudo', 'shutdown', '-h', 'now'])
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
     return web.Response(status=200)
 
 
@@ -429,6 +449,8 @@ async def start_server(macro_file: Optional[str], host: str='0.0.0.0', port: int
     app.router.add_post('/api/macros', api_save_macro)
     app.router.add_post('/api/select', api_select_macro)
     app.router.add_post('/api/stop', api_stop)
+    app.router.add_post('/api/restart_host', api_restart_host)
+    app.router.add_post('/api/stop_host', api_stop_host)
 
     # Properly set up AppRunner and TCPSite and keep the server running until
     # cancelled. Use distinct names to avoid shadowing the MacroRunner `runner`.
