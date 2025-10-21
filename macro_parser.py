@@ -274,9 +274,33 @@ class MacroRunner:
             await self._task
         finally:
             self._task = None
+        # ensure controller is left in a neutral state
+        try:
+            await self.adapter.release_all_buttons()
+        except Exception:
+            pass
+        try:
+            await self.adapter.center_sticks()
+        except Exception:
+            pass
 
-    def pause(self):
+    async def pause(self):
+        """Pause execution and reset controller state to defaults.
+
+        This method clears the pause event (so the runner will block) and then
+        ensures all buttons are released and sticks centered so the system is
+        left in a safe idle state.
+        """
         self._pause_event.clear()
+        # release buttons and center sticks immediately
+        try:
+            await self.adapter.release_all_buttons()
+        except Exception:
+            pass
+        try:
+            await self.adapter.center_sticks()
+        except Exception:
+            pass
 
     def resume(self):
         self._pause_event.set()

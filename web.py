@@ -410,7 +410,17 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         except Exception:
                             pass
                 if cmd == 'pause':
-                    runner.pause()
+                    try:
+                        await runner.pause()
+                    except Exception as e:
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait(f'Error pausing runner: {e}')
+                            except Exception:
+                                try:
+                                    q.put(f'Error pausing runner: {e}')
+                                except Exception:
+                                    pass
                 elif cmd == 'resume':
                     runner.resume()
                 elif cmd == 'restart':

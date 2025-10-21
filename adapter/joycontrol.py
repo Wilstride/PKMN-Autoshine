@@ -57,6 +57,55 @@ class JoycontrolAdapter(BaseAdapter):
         self._ctrl.button_state.set_button(btn.value, False)
         await self._ctrl.send()
 
+    async def release_all_buttons(self) -> None:
+        """Release all buttons known in the Button enum and send a report."""
+        if self._ctrl is None:
+            # nothing to do if not connected
+            return
+        # button_state exposes set_button(name, bool)
+        for b in [
+            'a','b','x','y','l','r','zl','zr','plus','minus','home','capture',
+            'dpad_up','dpad_down','dpad_left','dpad_right','l_stick','r_stick'
+        ]:
+            try:
+                self._ctrl.button_state.set_button(b, False)
+            except Exception:
+                pass
+        await self._ctrl.send()
+
+    async def center_sticks(self) -> None:
+        """Center both sticks using calibration centers (or 0x0800 default)."""
+        if self._ctrl is None:
+            return
+        try:
+            l = getattr(self._ctrl, 'l_stick_state', None)
+            r = getattr(self._ctrl, 'r_stick_state', None)
+            if l is not None:
+                # try to use calibration center if available
+                try:
+                    cal = l.get_calibration()
+                    h_center = cal.h_center
+                    v_center = cal.v_center
+                except Exception:
+                    h_center = 0x0800
+                    v_center = 0x0800
+                l.set_h(h_center)
+                l.set_v(v_center)
+            if r is not None:
+                try:
+                    cal = r.get_calibration()
+                    h_center = cal.h_center
+                    v_center = cal.v_center
+                except Exception:
+                    h_center = 0x0800
+                    v_center = 0x0800
+                r.set_h(h_center)
+                r.set_v(v_center)
+            await self._ctrl.send()
+        except Exception:
+            # swallow errors to keep this safe to call
+            pass
+
     async def stick(self, stick: Stick = Stick.L_STICK, h: int = 0x0800, v: int = 0x0800) -> None:
         """Set chosen stick horizontal and vertical and send the report."""
         if self._ctrl is None:

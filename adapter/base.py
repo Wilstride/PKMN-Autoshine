@@ -57,3 +57,19 @@ class BaseAdapter(abc.ABC):
         the range [-1.0, 1.0] where -1 is full negative, 0 is center, +1 is
         full positive. Implementations must accept both styles.
         """
+
+    @abc.abstractmethod
+    async def release_all_buttons(self) -> None:
+        """Release all known buttons (set to released state) and send a report.
+
+        Implementations should be idempotent and safe to call when the
+        underlying controller is not yet connected.
+        """
+
+    @abc.abstractmethod
+    async def center_sticks(self) -> None:
+        """Move all sticks to their centered position (0.0, 0.0) and send a report.
+
+        Implementations should be idempotent and safe to call when the
+        underlying controller is not yet connected.
+        """
