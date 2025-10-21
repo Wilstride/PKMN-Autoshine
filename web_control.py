@@ -22,7 +22,7 @@ logging.basicConfig(
     format='[%(levelname)s] %(name)s: %(message)s'
 )
 
-ROOT = pathlib.Path(__file__).parents[1]
+ROOT = pathlib.Path(__file__).parent
 
 INDEX_HTML = '''
 <!doctype html>
@@ -39,6 +39,19 @@ INDEX_HTML = '''
   <button id="restart">Restart</button>
   <div id="status">Status: idle</div>
   <div id="log"></div>
+    <hr>
+    <div>
+        <label for="macro_select">Select macro:</label>
+        <select id="macro_select"></select>
+        <button id="run_macro">Run</button>
+    </div>
+    <div>
+        <h3>Create / Edit Macro</h3>
+        <input id="macro_name" placeholder="filename.txt" />
+        <button id="save_macro">Save</button>
+        <br>
+        <textarea id="macro_editor" style="width:100%;height:200px"></textarea>
+    </div>
 <script>
 let ws = new WebSocket("ws://"+location.host+"/ws");
 ws.onopen = ()=>console.log('ws open');
@@ -55,6 +68,49 @@ function send(cmd){ ws.send(JSON.stringify({cmd:cmd})); }
 document.getElementById('pause').onclick = ()=>send('pause');
 document.getElementById('resume').onclick = ()=>send('resume');
 document.getElementById('restart').onclick = ()=>send('restart');
+// Macro UI helpers
+async function listMacros(){
+    let res = await fetch('/api/macros');
+    if(!res.ok) return;
+    let names = await res.json();
+    let sel = document.getElementById('macro_select');
+    sel.innerHTML = '';
+    names.forEach(n=>{ let o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+}
+
+document.getElementById('run_macro').onclick = async ()=>{
+    let sel = document.getElementById('macro_select');
+    let name = sel.value;
+    if(!name) return;
+    await fetch('/api/select', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name:name})});
+}
+
+document.getElementById('save_macro').onclick = async ()=>{
+    let name = document.getElementById('macro_name').value;
+    let content = document.getElementById('macro_editor').value;
+    if(!name) return alert('Enter filename');
+    let res = await fetch('/api/macros', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name:name, content:content})});
+    if(res.ok){
+        await listMacros();
+        alert('Saved');
+    } else {
+        alert('Save failed');
+    }
+}
+
+document.getElementById('macro_select').onchange = async ()=>{
+    let name = document.getElementById('macro_select').value;
+    if(!name) return;
+    let res = await fetch('/api/macros/'+encodeURIComponent(name));
+    if(res.ok){
+        let text = await res.text();
+        document.getElementById('macro_editor').value = text;
+        document.getElementById('macro_name').value = name;
+    }
+}
+
+// populate list on load
+listMacros().catch(e=>console.error(e));
 </script>
 </body>
 </html>
@@ -100,6 +156,47 @@ async def websocket_handler(request):
 
 async def index(request):
     return web.Response(text=INDEX_HTML, content_type='text/html')
+
+
+async def api_list_macros(request):
+    logging.getLogger(__name__).debug('api_list_macros called; ROOT=%s', ROOT)
+    macros_dir = ROOT / 'macros'
+    if not macros_dir.exists():
+        return web.json_response([], status=200)
+    names = [p.name for p in macros_dir.iterdir() if p.is_file()]
+    return web.json_response(sorted(names))
+
+
+async def api_get_macro(request):
+    name = request.match_info['name']
+    from pathlib import Path
+    path = ROOT / 'macros' / Path(name).name
+    if not path.exists():
+        return web.Response(status=404)
+    return web.Response(text=path.read_text(), content_type='text/plain')
+
+
+async def api_save_macro(request):
+    data = await request.json()
+    name = data.get('name')
+    content = data.get('content', '')
+    if not name:
+        return web.Response(status=400, text='name required')
+    from pathlib import Path
+    path = ROOT / 'macros' / Path(name).name
+    path.write_text(content)
+    return web.Response(status=201)
+
+
+async def api_select_macro(request):
+    data = await request.json()
+    name = data.get('name')
+    if not name:
+        return web.Response(status=400, text='name required')
+    # send load command to worker via cmd_q
+    cmd_q: 'queue.Queue' = request.app['cmd_q']
+    cmd_q.put(f'load:{name}')
+    return web.Response(status=200)
 
 
 async def worker_main(macro_file: str, cmd_q: 'queue.Queue', logs_qs: list):
@@ -208,6 +305,34 @@ async def worker_main(macro_file: str, cmd_q: 'queue.Queue', logs_qs: list):
                 elif cmd == 'stop':
                     await runner.stop()
                     break
+                elif isinstance(cmd, str) and cmd.startswith('load:'):
+                    # load:<filename> -> load macro from macros/ and restart runner
+                    name = cmd.split(':',1)[1]
+                    try:
+                        # sanitize and only allow basename
+                        from pathlib import Path
+                        mpath = Path(ROOT) / 'macros' / Path(name).name
+                        text = mpath.read_text()
+                        new_commands = parse_macro(text)
+                        runner.set_commands(new_commands)
+                        await runner.restart()
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait(f'Loaded macro: {name} ({len(new_commands)} commands)')
+                            except Exception:
+                                try:
+                                    q.put(f'Loaded macro: {name} ({len(new_commands)} commands)')
+                                except Exception:
+                                    pass
+                    except Exception as e:
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait(f'Error loading macro {name}: {e}')
+                            except Exception:
+                                try:
+                                    q.put(f'Error loading macro {name}: {e}')
+                                except Exception:
+                                    pass
 
         await runner.start()
         await asyncio.gather(forward_rlogs(), cmd_handler())
@@ -253,6 +378,10 @@ async def start_server(macro_file: str, host: str='0.0.0.0', port: int=8080):
     app['logs_ws_q'] = logs_ws_q
     app.router.add_get('/', index)
     app.router.add_get('/ws', websocket_handler)
+    app.router.add_get('/api/macros', api_list_macros)
+    app.router.add_get('/api/macros/{name}', api_get_macro)
+    app.router.add_post('/api/macros', api_save_macro)
+    app.router.add_post('/api/select', api_select_macro)
 
     # Properly set up AppRunner and TCPSite and keep the server running until
     # cancelled. Use distinct names to avoid shadowing the MacroRunner `runner`.
