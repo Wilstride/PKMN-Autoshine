@@ -33,19 +33,56 @@ The Pico W acts as a bridge, converting USB serial commands into authentic Ninte
 
 ## Quick Start
 
-### 1. Flash Firmware
+PKMN-Autoshine automatically detects and uses the best available adapter:
+
+1. **Pico W Adapter** (preferred) - Hardware-based, reliable, cross-platform
+2. **Joycontrol Adapter** (fallback) - Software-based, Linux-only
+
+### Option A: Pico W Setup (Recommended)
+
+#### 1. Flash Firmware
 
 1. Hold the BOOTSEL button on your Pico W and plug it into USB
 2. Copy `firmware/build/src/autoshine_pico_firmware.uf2` to the RPI-RP2 drive
 3. The Pico W will reboot and appear as a USB serial device (e.g., `/dev/ttyACM0`)
 
-### 2. Pair with Nintendo Switch
+#### 2. Pair with Nintendo Switch
 
 1. Go to Switch Settings → Controllers and Sensors → Change Grip/Order
 2. Press and hold the SYNC button (or use the firmware's pairing mode)
 3. The Switch should detect and connect to the "Pro Controller"
 
-### 3. Send Commands
+#### 3. Run Automation
+
+```bash
+# Check adapter status first (recommended)
+python check_status.py
+
+# Run automation (automatically detects and uses Pico W)
+python cli.py
+```
+
+### Option B: Joycontrol Fallback (Linux Only)
+
+If no Pico W is detected, the system automatically falls back to joycontrol:
+
+1. Install dependencies: `sudo apt install python3-dbus libhidapi-hidraw0 libbluetooth-dev bluez`
+2. Configure Bluetooth as per [joycontrol documentation](https://github.com/Poohl/joycontrol)
+3. Run: `python cli.py` (will automatically use joycontrol if Pico W unavailable)
+
+### Manual Adapter Selection
+
+Use the flexible CLI for explicit adapter control:
+
+```bash
+# Force Pico W adapter
+python cli_flexible.py --adapter pico --macro data/macros/plza_travel_cafe.txt
+
+# Force joycontrol adapter  
+python cli_flexible.py --adapter joycontrol --macro data/macros/plza_travel_cafe.txt --loop
+```
+
+### 4. Send Commands
 
 Using Python with PySerial:
 
@@ -98,18 +135,62 @@ ser.close()
 
 ```
 PKMN-Autoshine/
-├── README.md                 # This file
+├── README.md                 # This file  
+├── cli.py                    # Main CLI (auto-detects adapter)
+├── cli_flexible.py           # CLI with manual adapter selection
+├── check_status.py           # Adapter status diagnostics
 ├── firmware/                 # Pico W firmware source
 │   ├── src/                  # C++ source files
-│   ├── include/              # Header files
+│   ├── include/              # Header files  
 │   ├── build/                # Build artifacts
 │   └── README.md             # Firmware documentation
 ├── adapter/                  # Python adapter classes
-├── cli/                      # Command-line interface
+│   ├── base.py               # Abstract adapter interface
+│   ├── pico.py               # Pico W USB serial adapter
+│   ├── joycontrol.py         # Joycontrol Bluetooth adapter
+│   └── factory.py            # Adapter selection and fallback
+├── cli/                      # Command-line interface implementation
 ├── data/macros/              # Macro script files
 ├── macros/                   # Python macro system
 └── webapp/                   # Web interface (optional)
 ```
+
+## Adapter Status and Troubleshooting
+
+### Check Adapter Availability
+
+```python
+from adapter.factory import get_available_adapters, test_adapter_connectivity
+import asyncio
+
+# Check which adapters have their dependencies installed
+available = get_available_adapters()
+print(f"Available adapters: {available}")
+
+# Test actual connectivity
+async def check_connectivity():
+    status = await test_adapter_connectivity()
+    for adapter, connected in status.items():
+        print(f"{adapter}: {'✓ Connected' if connected else '✗ Failed'}")
+
+asyncio.run(check_connectivity())
+```
+
+### Troubleshooting Connection Issues
+
+**Pico W Issues:**
+- Ensure firmware is properly flashed
+- Check that `/dev/ttyACM0` (or similar) appears after connecting
+- **Permission fix**: `sudo usermod -a -G dialout $USER` (then logout/login)
+- Or run with sudo: `sudo python cli.py`
+- Try `sudo dmesg | tail` to see USB enumeration messages
+- Install pyserial: `pip install pyserial`
+
+**Joycontrol Issues:**
+- Ensure Bluetooth is properly configured (see joycontrol docs)
+- Switch must be in pairing mode (Change Grip/Order)  
+- Run with `sudo` if needed for Bluetooth access
+- Check that required packages are installed
 
 ## Development
 
@@ -131,10 +212,14 @@ make -j4
 
 ```bash
 # Install dependencies
-pip install pyserial
+pip install pyserial  # For Pico adapter
 
-# Run existing automation scripts
-python cli.py --help
+# For joycontrol fallback (Linux only):
+sudo apt install python3-dbus libhidapi-hidraw0 libbluetooth-dev bluez
+sudo pip install aioconsole hid crc8
+
+# Run automation scripts
+python cli.py  # Auto-selects best adapter
 ```
 
 ## Acknowledgments
