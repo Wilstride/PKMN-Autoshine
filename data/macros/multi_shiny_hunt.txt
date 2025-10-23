@@ -1,0 +1,70 @@
+# Multi-Controller Pokemon Shiny Hunting
+# Run multiple games simultaneously for increased shiny chances
+# Each controller manages a separate Switch console
+
+# Start all games - Press A to get past title screens
+*:PRESS A
+SLEEP 3
+*:PRESS A
+SLEEP 2
+
+# Each controller goes to a different hunting location
+# Controller 0: Route hunting
+pico_0:PRESS X
+SLEEP 1
+pico_0:STICK L 1.0 0.0
+SLEEP 2
+pico_0:STICK L 0.0 0.0
+
+# Controller 1: Wild Area hunting  
+pico_1:PRESS Y
+SLEEP 1
+pico_1:STICK L -1.0 0.0
+SLEEP 2
+pico_1:STICK L 0.0 0.0
+
+# Controller 2: Cafe method (if available)
+pico_2:PRESS PLUS
+SLEEP 1
+pico_2:PRESS A
+SLEEP 2
+
+# Synchronized encounter setup
+SLEEP 1
+
+# Start hunting loops for each controller
+# Loop 1: Random encounters
+pico_0:STICK L 0.0 1.0
+SLEEP 1
+pico_0:STICK L 0.0 0.0
+SLEEP 0.5
+pico_0:PRESS A
+SLEEP 2
+
+# Loop 2: Wild Area spawns
+pico_1:STICK R 1.0 0.0
+SLEEP 0.5
+pico_1:STICK R 0.0 0.0
+SLEEP 1
+pico_1:PRESS A
+SLEEP 2
+
+# Loop 3: Cafe refresh
+pico_2:PRESS A
+SLEEP 1
+pico_2:PRESS B
+SLEEP 1
+
+# Check for shinies - manual intervention required
+# This is where a human would check each screen
+SLEEP 5
+
+# If no shiny found, continue hunting
+# Reset encounters on all controllers
+*:PRESS B
+SLEEP 1
+*:PRESS B  
+SLEEP 1
+
+# Return to hunting positions
+SLEEP 2

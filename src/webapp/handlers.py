@@ -159,7 +159,7 @@ async def api_select_adapter(request):
         data = await request.json()
         adapter_type = data.get('adapter')
         
-        if adapter_type not in [None, 'pico', 'joycontrol']:
+        if adapter_type not in [None, 'pico', 'multi-pico', 'joycontrol']:
             return web.Response(status=400, text='Invalid adapter type')
         
         # Update the app's preferred adapter
@@ -173,6 +173,31 @@ async def api_select_adapter(request):
         return web.json_response({
             'preferred': adapter_type,
             'message': 'Adapter preference updated. Restart the system to take effect.'
+        })
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+
+
+async def api_list_controllers(request):
+    """List connected controllers (if using multi-pico adapter)."""
+    try:
+        # This would need to be implemented by storing the adapter reference
+        # For now, return a placeholder response
+        return web.json_response({
+            'controllers': [],
+            'message': 'Controller listing requires system restart with multi-pico adapter'
+        })
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+
+
+async def api_controller_status(request):
+    """Get status of all connected controllers."""
+    try:
+        # This would need adapter reference to get actual status
+        return web.json_response({
+            'controllers': {},
+            'message': 'Controller status requires system restart with multi-pico adapter'
         })
     except Exception as e:
         return web.Response(status=500, text=str(e))

@@ -11,7 +11,7 @@ async def create_adapter(preferred: Optional[str] = None) -> BaseAdapter:
     """Create an adapter with automatic detection and fallback.
     
     Args:
-        preferred: Preferred adapter type ('pico' or 'joycontrol'). 
+        preferred: Preferred adapter type ('pico', 'multi-pico', or 'joycontrol'). 
                   If None, tries Pico first, then joycontrol.
     
     Returns:
@@ -24,18 +24,35 @@ async def create_adapter(preferred: Optional[str] = None) -> BaseAdapter:
         # User specifically requested joycontrol
         return await _create_joycontrol_adapter()
     elif preferred == 'pico':
-        # User specifically requested pico
+        # User specifically requested single pico
         return await _create_pico_adapter()
+    elif preferred == 'multi-pico':
+        # User specifically requested multi-pico
+        return await _create_multi_pico_adapter()
     else:
-        # Auto-detect: try Pico first, then joycontrol
+        # Auto-detect: try Multi-Pico first, then single Pico, then joycontrol
         return await _create_adapter_with_fallback()
 
 
 async def _create_adapter_with_fallback() -> BaseAdapter:
-    """Try Pico adapter first, fall back to joycontrol."""
-    # Try Pico W adapter first
+    """Try Multi-Pico adapter first, then single Pico, then joycontrol."""
+    # First try Multi-Pico adapter to see if multiple devices are available
     try:
-        logger.info("Attempting to connect to Pico W firmware...")
+        logger.info("Attempting to connect to multiple Pico W devices...")
+        adapter = await _create_multi_pico_adapter()
+        if len(adapter.get_device_ids()) > 1:
+            logger.info(f"✓ Connected to {len(adapter.get_device_ids())} Pico W devices")
+            return adapter
+        else:
+            # Only one device found, close multi-adapter and use single adapter
+            adapter.close()
+            logger.info("Only one device found, using single Pico adapter...")
+    except Exception as e:
+        logger.warning(f"Multi-Pico connection failed: {e}")
+    
+    # Try single Pico W adapter
+    try:
+        logger.info("Attempting to connect to single Pico W device...")
         adapter = await _create_pico_adapter()
         logger.info("✓ Connected to Pico W firmware via USB serial")
         return adapter
@@ -54,7 +71,7 @@ async def _create_adapter_with_fallback() -> BaseAdapter:
         raise RuntimeError(
             "Could not connect to any adapter!\n"
             "Troubleshooting:\n"
-            "1. For Pico W: Make sure firmware is flashed and device appears as /dev/ttyACM0\n"
+            "1. For Pico W: Make sure firmware is flashed and device appears as /dev/ttyACM* (multiple devices supported)\n"
             "2. For joycontrol: Ensure Bluetooth is configured and Switch is in pairing mode"
         )
 
@@ -75,6 +92,14 @@ async def _create_joycontrol_adapter() -> BaseAdapter:
     return adapter
 
 
+async def _create_multi_pico_adapter() -> BaseAdapter:
+    """Create and connect multi-Pico adapter."""
+    from adapter.pico import MultiPicoAdapter
+    adapter = MultiPicoAdapter()
+    await adapter.connect()
+    return adapter
+
+
 def get_available_adapters() -> list[str]:
     """Get list of available adapter types."""
     adapters = []
@@ -83,6 +108,7 @@ def get_available_adapters() -> list[str]:
     try:
         import serial
         adapters.append('pico')
+        adapters.append('multi-pico')
     except ImportError:
         pass
     
@@ -103,6 +129,14 @@ async def test_adapter_connectivity() -> dict[str, bool]:
         Dictionary mapping adapter names to connectivity status.
     """
     results = {}
+    
+    # Test Multi-Pico adapter
+    try:
+        adapter = await _create_multi_pico_adapter()
+        adapter.close()
+        results['multi-pico'] = True
+    except Exception:
+        results['multi-pico'] = False
     
     # Test Pico adapter
     try:

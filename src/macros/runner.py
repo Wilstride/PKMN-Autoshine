@@ -10,10 +10,10 @@ from typing import List, Tuple, Any
 from asyncio import Queue, Event
 
 
-async def run_macro(adapter, commands: List[Tuple[str, List[str]]], dry_run: bool = False):
+async def run_macro(adapter, commands: List[Tuple[str, List[str], str | None]], dry_run: bool = False):
     from adapter.base import Button, Stick
 
-    for cmd, args in commands:
+    for cmd, args, device_id in commands:
         if cmd == 'PRESS':
             if len(args) < 1:
                 raise ValueError('PRESS requires a button name')
@@ -26,18 +26,31 @@ async def run_macro(adapter, commands: List[Tuple[str, List[str]]], dry_run: boo
                 except Exception:
                     raise ValueError(f'Unknown button: {btn_name}')
             if dry_run:
-                print(f'DRY PRESS {btn}')
+                device_str = f" on {device_id}" if device_id else ""
+                print(f'DRY PRESS {btn}{device_str}')
             else:
-                await adapter.press(btn)
+                # Check if adapter supports device targeting
+                if hasattr(adapter, 'press') and 'device_id' in adapter.press.__code__.co_varnames:
+                    await adapter.press(btn, device_id=device_id)
+                else:
+                    if device_id:
+                        raise ValueError(f'Adapter does not support device targeting (device_id: {device_id})')
+                    await adapter.press(btn)
 
         elif cmd == 'SLEEP':
             if len(args) < 1:
                 raise ValueError('SLEEP requires seconds')
             sec = float(args[0])
             if dry_run:
-                print(f'DRY SLEEP {sec}s')
+                device_str = f" on {device_id}" if device_id else ""
+                print(f'DRY SLEEP {sec}s{device_str}')
             else:
-                await asyncio.sleep(sec)
+                # Check if adapter supports device targeting for sleep
+                if hasattr(adapter, 'sleep') and 'device_id' in adapter.sleep.__code__.co_varnames:
+                    await adapter.sleep(sec, device_id=device_id)
+                else:
+                    # For sleep, just sleep globally if device_id is not supported
+                    await asyncio.sleep(sec)
 
         elif cmd == 'STICK':
             if len(args) < 3:
@@ -56,15 +69,22 @@ async def run_macro(adapter, commands: List[Tuple[str, List[str]]], dry_run: boo
             v = parse_axis(args[2])
 
             if dry_run:
-                print(f'DRY STICK {stick_enum} h={h} v={v}')
+                device_str = f" on {device_id}" if device_id else ""
+                print(f'DRY STICK {stick_enum} h={h} v={v}{device_str}')
             else:
-                await adapter.stick(stick_enum, h=h, v=v)
+                # Check if adapter supports device targeting
+                if hasattr(adapter, 'stick') and 'device_id' in adapter.stick.__code__.co_varnames:
+                    await adapter.stick(stick_enum, h=h, v=v, device_id=device_id)
+                else:
+                    if device_id:
+                        raise ValueError(f'Adapter does not support device targeting (device_id: {device_id})')
+                    await adapter.stick(stick_enum, h=h, v=v)
 
         else:
             raise ValueError(f'Unknown macro command: {cmd}')
 
 
-async def run_commands(adapter, commands: List[Tuple[str, List[str]]], *, log_queue: Queue | None = None, pause_event: Event | None = None, stop_event: Event | None = None):
+async def run_commands(adapter, commands: List[Tuple[str, List[str], str | None]], *, log_queue: Queue | None = None, pause_event: Event | None = None, stop_event: Event | None = None):
     from adapter.base import Button, Stick
 
     def log(msg: str):
@@ -76,12 +96,14 @@ async def run_commands(adapter, commands: List[Tuple[str, List[str]]], *, log_qu
             except Exception:
                 pass
 
-    for cmd, args in commands:
+    for cmd, args, device_id in commands:
         if stop_event is not None and stop_event.is_set():
             log('stopped')
             return
         if pause_event is not None:
             await pause_event.wait()
+
+        device_str = f" on {device_id}" if device_id else ""
 
         if cmd == 'PRESS':
             btn_name = args[0].upper() if args else ''
@@ -92,22 +114,35 @@ async def run_commands(adapter, commands: List[Tuple[str, List[str]]], *, log_qu
                     btn = Button(btn_name.lower())
                 except Exception:
                     raise ValueError(f'Unknown button: {btn_name}')
-            log(f'PRESS {btn.name}')
-            await adapter.press(btn)
+            log(f'PRESS {btn.name}{device_str}')
+            
+            # Check if adapter supports device targeting
+            if hasattr(adapter, 'press') and 'device_id' in adapter.press.__code__.co_varnames:
+                await adapter.press(btn, device_id=device_id)
+            else:
+                if device_id:
+                    raise ValueError(f'Adapter does not support device targeting (device_id: {device_id})')
+                await adapter.press(btn)
 
         elif cmd == 'SLEEP':
             sec = float(args[0]) if args else 0.0
-            log(f'SLEEP {sec}s')
-            remaining = sec
-            interval = 0.1
-            while remaining > 0:
-                if stop_event is not None and stop_event.is_set():
-                    log('stopped during sleep')
-                    return
-                if pause_event is not None:
-                    await pause_event.wait()
-                await asyncio.sleep(min(interval, remaining))
-                remaining -= interval
+            log(f'SLEEP {sec}s{device_str}')
+            
+            # Check if adapter supports device targeting for sleep
+            if hasattr(adapter, 'sleep') and 'device_id' in adapter.sleep.__code__.co_varnames:
+                await adapter.sleep(sec, device_id=device_id)
+            else:
+                # For sleep, handle it globally regardless of device_id
+                remaining = sec
+                interval = 0.1
+                while remaining > 0:
+                    if stop_event is not None and stop_event.is_set():
+                        log('stopped during sleep')
+                        return
+                    if pause_event is not None:
+                        await pause_event.wait()
+                    await asyncio.sleep(min(interval, remaining))
+                    remaining -= interval
 
         elif cmd == 'STICK':
             stick_name = args[0].upper() if args else 'L'
@@ -122,8 +157,15 @@ async def run_commands(adapter, commands: List[Tuple[str, List[str]]], *, log_qu
 
             h = parse_axis(args[1]) if len(args) > 1 else 0
             v = parse_axis(args[2]) if len(args) > 2 else 0
-            log(f'STICK {stick_enum.name} h={h} v={v}')
-            await adapter.stick(stick_enum, h=h, v=v)
+            log(f'STICK {stick_enum.name} h={h} v={v}{device_str}')
+            
+            # Check if adapter supports device targeting
+            if hasattr(adapter, 'stick') and 'device_id' in adapter.stick.__code__.co_varnames:
+                await adapter.stick(stick_enum, h=h, v=v, device_id=device_id)
+            else:
+                if device_id:
+                    raise ValueError(f'Adapter does not support device targeting (device_id: {device_id})')
+                await adapter.stick(stick_enum, h=h, v=v)
 
         else:
             raise ValueError(f'Unknown macro command: {cmd}')
@@ -139,7 +181,7 @@ class MacroRunner:
         self._pause_event.set()
         self._stop_event = Event()
 
-    def set_commands(self, commands: List[Tuple[str, List[str]]]):
+    def set_commands(self, commands: List[Tuple[str, List[str], str | None]]):
         self._commands = commands
 
     def logs(self) -> Queue:

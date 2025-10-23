@@ -50,8 +50,9 @@
           <div class="form-group">
             <label for="adapter_select">Preferred Adapter:</label>
             <select id="adapter_select">
-              <option value="">Auto-detect (Pico first)</option>
-              <option value="pico">Pico W (USB Serial)</option>
+              <option value="">Auto-detect (Multi-Pico first)</option>
+              <option value="multi-pico">Multi-Pico (Multiple Controllers)</option>
+              <option value="pico">Pico W (Single Controller)</option>
               <option value="joycontrol">Joycontrol (Bluetooth)</option>
             </select>
           </div>
@@ -59,6 +60,16 @@
             <button id="set_adapter"><i class="fas fa-check"></i> Set</button>
             <button id="test_adapters"><i class="fas fa-wifi"></i> Test</button>
           </div>
+        </div>
+      </div>
+
+      <div class="controls-section" id="multi-controller-section" style="display: none;">
+        <h3 style="margin-bottom: 12px;"><i class="fas fa-gamepad"></i> Connected Controllers</h3>
+        <div class="controller-list" id="controller-list">
+          <div class="status-content">Multi-controller mode requires restart to show connected devices</div>
+        </div>
+        <div style="margin-top: 12px;">
+          <button id="refresh_controllers"><i class="fas fa-sync"></i> Refresh Controllers</button>
         </div>
       </div>
     </div>
@@ -577,6 +588,7 @@ SLEEP 0.1`;
         
         const statusLines = [
           `🔌 Adapter: ${preferred}`,
+          `${connectivity['multi-pico'] ? '✅' : '❌'} Multi-Pico: ${connectivity['multi-pico'] ? 'Available' : 'Unavailable'}`,
           `${connectivity.pico ? '✅' : '❌'} Pico W: ${connectivity.pico ? 'Available' : 'Unavailable'}`,
           `${connectivity.joycontrol ? '✅' : '❌'} Joycontrol: ${connectivity.joycontrol ? 'Available' : 'Unavailable'}`
         ];
@@ -584,9 +596,18 @@ SLEEP 0.1`;
         document.getElementById('adapter_status').textContent = statusLines.join('\n');
         document.getElementById('adapter_select').value = status.preferred || '';
         
+        // Show/hide multi-controller section based on preference
+        const multiControllerSection = document.getElementById('multi-controller-section');
+        if (status.preferred === 'multi-pico') {
+          multiControllerSection.style.display = 'block';
+          updateControllerList();
+        } else {
+          multiControllerSection.style.display = 'none';
+        }
+        
         // Update status card styling
         const adapterCard = document.getElementById('adapter_status').closest('.status-card');
-        if (connectivity.pico || connectivity.joycontrol) {
+        if (connectivity['multi-pico'] || connectivity.pico || connectivity.joycontrol) {
           adapterCard.classList.remove('error');
           adapterCard.classList.add('success');
         } else {
@@ -595,6 +616,34 @@ SLEEP 0.1`;
         }
       } catch (error) {
         console.error('Failed to update adapter status:', error);
+      }
+    }
+
+    async function updateControllerList() {
+      try {
+        const res = await fetch('/api/controllers');
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        const controllerList = document.getElementById('controller-list');
+        
+        if (data.controllers && data.controllers.length > 0) {
+          controllerList.innerHTML = data.controllers.map(controller => 
+            `<div class="controller-item">
+              <i class="fas fa-gamepad"></i> ${controller.id} 
+              <span class="controller-port">(${controller.port})</span>
+              <span class="controller-status ${controller.connected ? 'connected' : 'disconnected'}">
+                ${controller.connected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>`
+          ).join('');
+        } else {
+          controllerList.innerHTML = `<div class="status-content">${data.message || 'No controllers detected'}</div>`;
+        }
+      } catch (error) {
+        console.error('Failed to update controller list:', error);
+        document.getElementById('controller-list').innerHTML = 
+          '<div class="status-content">Error loading controller list</div>';
       }
     }
 
@@ -826,6 +875,9 @@ SLEEP 0.1`;
       // Adapter controls
       document.getElementById('set_adapter').onclick = setAdapter;
       document.getElementById('test_adapters').onclick = testAdapters;
+
+      // Multi-controller controls
+      document.getElementById('refresh_controllers').onclick = updateControllerList;
 
       // Log controls
       document.getElementById('clear-log').onclick = clearLog;

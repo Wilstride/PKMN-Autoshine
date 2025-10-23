@@ -21,15 +21,25 @@ The Pico W acts as a bridge, converting USB serial commands into authentic Ninte
 
 - **USB Serial Interface**: Send commands from any host system via standard serial communication
 - **Bluetooth Controller Emulation**: Full Nintendo Switch Pro Controller compatibility via Bluetooth
+- **Multi-Controller Support**: Control multiple Nintendo Switch consoles simultaneously with multiple Pico W devices
 - **Command Language**: Simple text-based command format for buttons, sticks, and timing
+- **Device Targeting**: Send commands to specific controllers or broadcast to all devices
 - **Real-time Processing**: Low-latency command execution for responsive automation
 - **Cross-platform Host**: Works with any system that supports USB serial (Linux, Windows, macOS)
+- **Web Interface**: User-friendly web control panel for managing macros and controllers
 
 ## Hardware Requirements
 
+### Single Controller Setup
 - **Raspberry Pi Pico W** (for Bluetooth and USB capabilities)
 - **Nintendo Switch** (with Bluetooth enabled)
 - **Host Computer** (with USB port and Python support)
+
+### Multi-Controller Setup  
+- **Multiple Raspberry Pi Pico W devices** (one per Switch console)
+- **Multiple Nintendo Switch consoles**
+- **Host Computer** with multiple USB ports
+- **USB hub** (recommended for many controllers)
 
 ## Quick Start
 
@@ -227,6 +237,55 @@ ser.close()
 - `CENTER_STICKS` - Center both analog sticks to neutral position
 - `RELEASE_ALL` - Release all pressed buttons
 - `# comment` - Comment lines (ignored)
+
+## Multi-Controller Support
+
+PKMN-Autoshine supports controlling multiple PicoSwitchController devices simultaneously, enabling automation across multiple Nintendo Switch consoles.
+
+### Device Targeting Syntax
+
+Commands can target specific controllers using the format:
+```
+device_id:COMMAND arguments
+```
+
+### Examples
+
+```bash
+# Press A on all controllers
+PRESS A
+
+# Press B on controller 0 only  
+pico_0:PRESS B
+
+# Press X on controller 1 only
+pico_1:PRESS X
+
+# Move all left sticks right
+STICK L 1.0 0.0
+
+# Move controller 0's left stick up
+pico_0:STICK L 0.0 1.0
+
+# Broadcast to all controllers explicitly
+all:PRESS HOME
+*:PRESS HOME
+```
+
+### Use Cases
+- **Shiny hunting**: Run multiple games simultaneously for better odds
+- **Resource farming**: Farm different materials across multiple save files  
+- **Multi-player coordination**: Control multiple characters in co-op games
+- **Parallel testing**: Test macros on multiple setups
+
+### Setup
+1. Connect multiple Pico W devices via USB
+2. Flash each with PicoSwitchController firmware
+3. Pair each device with a separate Nintendo Switch
+4. Select "Multi-Pico" adapter in the web interface
+5. Use device targeting syntax in your macros
+
+For detailed multi-controller documentation, see [MULTI_CONTROLLER.md](MULTI_CONTROLLER.md).
 
 ## Project Structure
 

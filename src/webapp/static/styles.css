@@ -441,6 +441,51 @@ select:focus, input[type="text"]:focus {
     resize: none;
     font-size: 16px; /* Prevent zoom */
   }
+}
 
+/* Multi-controller styles */
+.controller-list {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
 
+.controller-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin: 4px 0;
+  background: var(--bg-card);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.controller-item i {
+  color: var(--accent-primary);
+  margin-right: 8px;
+}
+
+.controller-port {
+  color: var(--text-secondary);
+  font-size: 0.9em;
+}
+
+.controller-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  font-weight: bold;
+}
+
+.controller-status.connected {
+  background: var(--accent-success);
+  color: white;
+}
+
+.controller-status.disconnected {
+  background: var(--accent-danger);
+  color: white;
 }

@@ -1,0 +1,60 @@
+# Multi-Controller Demo Macro
+# This demonstrates the syntax for targeting specific controllers
+# Format: device_id:COMMAND args OR COMMAND args (for all devices)
+
+# Press A on all controllers at once
+PRESS A
+SLEEP 1
+
+# Press specific buttons on individual controllers
+pico_0:PRESS B
+pico_1:PRESS X
+SLEEP 1
+
+# Move sticks on specific controllers
+pico_0:STICK L 1.0 0.0
+pico_1:STICK L -1.0 0.0
+SLEEP 2
+
+# Center all sticks on all controllers
+all:STICK L 0.0 0.0
+SLEEP 1
+
+# Use the wildcard syntax (equivalent to "all:")
+*:PRESS HOME
+SLEEP 2
+
+# Complex coordination example - simulate 2-player actions
+# Player 1 (pico_0) moves character, Player 2 (pico_1) follows
+pico_0:PRESS Y
+SLEEP 0.5
+pico_1:PRESS Y
+SLEEP 1
+
+# Move both players forward
+pico_0:STICK L 0.0 1.0
+pico_1:STICK L 0.0 1.0
+SLEEP 3
+
+# Stop movement
+STICK L 0.0 0.0
+SLEEP 1
+
+# Synchronized button presses
+pico_0:PRESS A
+pico_1:PRESS A
+SLEEP 0.5
+
+# Example: Different controllers doing different actions
+# This could be useful for farming multiple games simultaneously
+pico_0:PRESS PLUS
+SLEEP 0.1
+pico_1:PRESS MINUS
+SLEEP 0.1
+
+# Global sleep affects all controllers
+SLEEP 2
+
+# Clean up - return all to neutral state
+*:PRESS HOME
+SLEEP 1
