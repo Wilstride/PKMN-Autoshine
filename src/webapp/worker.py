@@ -220,7 +220,7 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                     try:
                         from pathlib import Path
                         # load macros from the data directory to avoid mixing code and data
-                        mpath = Path(pathlib.Path(__file__).parent.parent) / 'data' / 'macros' / Path(name).name
+                        mpath = Path(pathlib.Path(__file__).parent.parent.parent) / 'data' / 'macros' / Path(name).name
                         text = mpath.read_text()
                         new_commands = parse_macro(text)
                         runner.set_commands(new_commands)

@@ -11,7 +11,7 @@ import asyncio
 from aiohttp import web, WSMsgType
 from typing import Optional
 
-ROOT = pathlib.Path(__file__).parent.parent
+ROOT = pathlib.Path(__file__).parent.parent.parent
 
 INDEX_HTML = None
 
