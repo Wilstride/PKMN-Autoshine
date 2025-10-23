@@ -1,155 +1,867 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Macro Control</title>
-  <style>body{font-family:monospace;} #log{white-space:pre; background:#111; color:#0f0; padding:1rem; height:60vh; overflow:auto}</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PKMN Autoshine - Macro Control</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/shell/shell.min.js"></script>
+
 </head>
 <body>
-  <h1>Macro Control</h1>
-  <button id="pause">Pause</button>
-  <button id="resume">Resume</button>
-  <button id="restart">Restart</button>
-  <button id="stop">Stop</button>
-  <div id="status">Status: idle</div>
-  <pre id="macro_details" style="background:#222;color:#0f0;padding:0.5rem;margin-top:0.5rem;font-family:monospace"></pre>
-  <div id="adapter_status" style="background:#224;color:#fff;padding:0.5rem;margin-top:0.5rem;font-family:monospace"></div>
-  <div id="log"></div>
-  <hr>
-  <div>
-    <label for="macro_select">Select macro:</label>
-    <select id="macro_select"></select>
-    <button id="run_macro">Run</button>
-  </div>
-  <div>
-    <h3>Adapter Settings</h3>
-    <label for="adapter_select">Preferred adapter:</label>
-    <select id="adapter_select">
-      <option value="">Auto-detect (Pico first)</option>
-      <option value="pico">Pico W (USB Serial)</option>
-      <option value="joycontrol">Joycontrol (Bluetooth)</option>
-    </select>
-    <button id="set_adapter">Set Adapter</button>
-    <button id="test_adapters">Test Connectivity</button>
-  </div>
-  <div>
-    <h3>Create / Edit Macro</h3>
-    <input id="macro_name" placeholder="filename.txt" />
-    <button id="save_macro">Save</button>
-    <br>
-    <textarea id="macro_editor" style="width:100%;height:200px"></textarea>
-  </div>
-<script>
-async function updateMacroDetails(){
-    try{
-        let res = await fetch('/api/status');
-        if(!res.ok) return;
-        let s = await res.json();
-        document.getElementById('macro_details').textContent = `Macro: ${s.name || '-'}\nRuntime: ${s.runtime || '-'}\nIterations: ${s.iterations||0}\nSec/Iter: ${s.sec_per_iter||'-'}`;
-    }catch(e){console.error(e)}
-}
+  <div class="container">
+    <header class="header">
+      <h1><i class="fas fa-gamepad"></i> PKMN Autoshine</h1>
+      <p class="subtitle">Advanced Pokémon Macro Automation Control</p>
+    </header>
 
-async function updateAdapterStatus(){
-    try{
-        let res = await fetch('/api/adapters/status');
-        if(!res.ok) return;
-        let s = await res.json();
-        let preferred = s.preferred || 'auto-detect';
-        let connectivity = s.connectivity || {};
-        let statusText = `Adapter: ${preferred}\n`;
-        statusText += `Pico: ${connectivity.pico ? '✓ Available' : '✗ Unavailable'}\n`;
-        statusText += `Joycontrol: ${connectivity.joycontrol ? '✓ Available' : '✗ Unavailable'}`;
-        document.getElementById('adapter_status').textContent = statusText;
+    <div class="card control-panel">
+      <h2><i class="fas fa-play-circle"></i> Macro Controls</h2>
+      
+      <div class="controls-section">
+        <div class="button-group">
+          <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause</button>
+          <button id="resume" class="success"><i class="fas fa-play"></i> Resume</button>
+          <button id="restart" class="warning"><i class="fas fa-redo"></i> Restart</button>
+          <button id="stop" class="danger"><i class="fas fa-stop"></i> Stop</button>
+        </div>
+      </div>
+
+      <div class="controls-section">
+        <h3 style="margin-bottom: 12px;"><i class="fas fa-list"></i> Select Macro</h3>
+        <div class="macro-selector">
+          <div class="form-group">
+            <label for="macro_select">Available Macros:</label>
+            <select id="macro_select">
+              <option value="">Choose a macro...</option>
+            </select>
+          </div>
+          <button id="run_macro" class="success"><i class="fas fa-rocket"></i> Run Selected</button>
+        </div>
+      </div>
+
+      <div class="controls-section">
+        <h3 style="margin-bottom: 12px;"><i class="fas fa-cog"></i> Adapter Settings</h3>
+        <div class="adapter-grid">
+          <div class="form-group">
+            <label for="adapter_select">Preferred Adapter:</label>
+            <select id="adapter_select">
+              <option value="">Auto-detect (Pico first)</option>
+              <option value="pico">Pico W (USB Serial)</option>
+              <option value="joycontrol">Joycontrol (Bluetooth)</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="set_adapter"><i class="fas fa-check"></i> Set</button>
+            <button id="test_adapters"><i class="fas fa-wifi"></i> Test</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card status-display">
+      <h2><i class="fas fa-info-circle"></i> Status Monitor</h2>
+      
+      <div class="status-card" id="status-card">
+        <div class="status-label">
+          <i class="fas fa-circle"></i> Current Status
+          <div class="connection-indicator">
+            <span class="connection-dot" id="ws-indicator"></span>
+            <span id="ws-status">Connecting...</span>
+          </div>
+        </div>
+        <div class="status-content" id="status">Initializing...</div>
+      </div>
+
+      <div class="status-card">
+        <div class="status-label"><i class="fas fa-play"></i> Macro Details</div>
+        <div class="status-content" id="macro_details">No macro loaded</div>
+      </div>
+
+      <div class="status-card">
+        <div class="status-label"><i class="fas fa-plug"></i> Adapter Status</div>
+        <div class="status-content" id="adapter_status">Checking connectivity...</div>
+      </div>
+    </div>
+
+    <div class="editor-section">
+      <div class="card editor-container">
+        <div class="editor-header">
+          <h2><i class="fas fa-code"></i> Macro Editor</h2>
+          <div class="editor-controls">
+            <input id="macro_name" type="text" placeholder="Enter filename.txt" style="width: 200px;">
+            <button id="save_macro" class="success"><i class="fas fa-save"></i> Save</button>
+            <button id="new_macro"><i class="fas fa-file-plus"></i> New</button>
+          </div>
+        </div>
+        <div id="editor-wrapper">
+          <textarea id="macro_editor" placeholder="# Enter your macro commands here...
+# Available commands:
+# PRESS <button>     - Press a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
+# STICK <stick> <x> <y> - Move analog stick (l or r, coordinates -1.0 to 1.0)  
+# SLEEP <seconds>    - Wait for specified time
+# 
+# Example:
+# PRESS a
+# SLEEP 0.5
+# STICK l 0.0 1.0
+# SLEEP 0.1"></textarea>
+          <textarea id="mobile-fallback-editor" class="mobile-fallback-editor"></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><i class="fas fa-terminal"></i> Live Logs</h2>
+        <div class="log-container">
+          <div class="log-header">
+            <span>Console Output</span>
+            <button id="clear-log" style="padding: 4px 8px; font-size: 0.8rem;">
+              <i class="fas fa-trash"></i> Clear
+            </button>
+          </div>
+          <div class="log-content" id="log">Waiting for connection...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Global variables
+    let editor;
+    let ws;
+    let wsReconnectInterval;
+    let currentMacroName = '';
+
+    // Utility function to detect mobile devices
+    function isMobileDevice() {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+             ('ontouchstart' in window) ||
+             (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+    }
+
+    // Check if we should use the fallback editor
+    function shouldUseFallback() {
+      // Check for problematic mobile browsers or user preference
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isProblematicBrowser = userAgent.includes('chrome') && userAgent.includes('mobile');
+      
+      // Check localStorage for user preference
+      const preferFallback = localStorage.getItem('useFallbackEditor') === 'true';
+      
+      return preferFallback || isProblematicBrowser;
+    }
+
+    // Initialize fallback editor for mobile
+    function initializeFallbackEditor() {
+      const wrapper = document.getElementById('editor-wrapper');
+      const fallbackEditor = document.getElementById('mobile-fallback-editor');
+      
+      wrapper.classList.add('use-fallback');
+      
+      // Add helpful placeholder for mobile users
+      fallbackEditor.placeholder = `Enter your macro commands here...
+
+Available commands:
+PRESS <button>     - Press a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
+STICK <stick> <x> <y> - Move analog stick (l or r, coordinates -1.0 to 1.0)
+SLEEP <seconds>    - Wait for specified time
+
+Example:
+PRESS a
+SLEEP 0.5
+STICK l 0.0 1.0
+SLEEP 0.1`;
+
+      // Set up fallback editor as the main editor interface
+      editor = {
+        getValue: function() {
+          return fallbackEditor.value;
+        },
+        setValue: function(value) {
+          fallbackEditor.value = value;
+        },
+        getWrapperElement: function() {
+          return fallbackEditor;
+        },
+        refresh: function() {
+          // No-op for regular textarea
+        },
+        focus: function() {
+          fallbackEditor.focus();
+        }
+      };
+
+      // Add a button to switch back to CodeMirror if desired
+      const switchButton = document.createElement('button');
+      switchButton.textContent = '🔄 Try Advanced Editor';
+      switchButton.style.cssText = `
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: var(--accent-primary);
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        z-index: 1000;
+      `;
+      
+      wrapper.style.position = 'relative';
+      wrapper.appendChild(switchButton);
+      
+      switchButton.onclick = function() {
+        localStorage.setItem('useFallbackEditor', 'false');
+        location.reload();
+      };
+
+      addLogMessage('📱 Using mobile-optimized editor', 'info');
+    }
+
+    // Initialize CodeMirror with custom syntax highlighting
+    function initializeEditor() {
+      // Check if we should use the mobile fallback
+      if (isMobileDevice() && shouldUseFallback()) {
+        initializeFallbackEditor();
+        return;
+      }
+
+      // Define custom mode for macro syntax
+      CodeMirror.defineMode("macro", function() {
+        return {
+          token: function(stream, state) {
+            // Comments
+            if (stream.match(/^#.*/)) {
+              return "comment";
+            }
+            
+            // Commands
+            if (stream.match(/^(PRESS|STICK|SLEEP)\b/)) {
+              return "keyword";
+            }
+            
+            // Button names
+            if (stream.match(/\b(a|b|x|y|l|r|zl|zr|plus|minus|home|capture|ls|rs)\b/)) {
+              return "atom";
+            }
+            
+            // Numbers (coordinates, time values)
+            if (stream.match(/[-+]?\d*\.?\d+/)) {
+              return "number";
+            }
+            
+            // Strings
+            if (stream.match(/^"([^"\\]|\\.)*"/)) {
+              return "string";
+            }
+            
+            stream.next();
+            return null;
+          }
+        };
+      });
+
+      // Use different input methods for mobile vs desktop
+      const isMobile = isMobileDevice();
+      const editorConfig = {
+        mode: 'macro',
+        theme: 'dracula',
+        lineNumbers: true,
+        indentUnit: 2,
+        lineWrapping: true,
+        autoCloseBrackets: true,
+        matchBrackets: true,
+        showCursorWhenSelecting: true,
+        tabSize: 2,
+        extraKeys: {
+          "Ctrl-S": function() { saveMacro(); },
+          "Cmd-S": function() { saveMacro(); }
+        }
+      };
+
+      // Add mobile-specific configuration
+      if (isMobile) {
+        editorConfig.inputStyle = "textarea";  // Use textarea input for better mobile support
+        editorConfig.spellcheck = false;
+        editorConfig.autocorrect = false;
+        editorConfig.autocapitalize = false;
+        editorConfig.lineWiseCopyCut = false;
+        editorConfig.undoDepth = 200;
+      } else {
+        editorConfig.inputStyle = "contenteditable";
+        // Add desktop backspace handler
+        editorConfig.extraKeys["Backspace"] = function(cm) {
+          const cursor = cm.getCursor();
+          if (cursor.ch === 0 && cursor.line > 0) {
+            const prevLine = cm.getLine(cursor.line - 1);
+            const prevLineEnd = prevLine.length;
+            cm.replaceRange("", 
+              {line: cursor.line - 1, ch: prevLineEnd}, 
+              {line: cursor.line, ch: 0}
+            );
+          } else {
+            return CodeMirror.Pass;
+          }
+        };
+      }
+
+      editor = CodeMirror.fromTextArea(document.getElementById('macro_editor'), editorConfig);
+
+      // Setup mobile support function
+      function setupMobileSupport(cm) {
+        let lastContent = cm.getValue();
+        let isHandlingInput = false;
+
+        // Handle virtual keyboard changes on mobile
+        cm.on('focus', function() {
+          setTimeout(() => {
+            if (window.visualViewport) {
+              const handleViewportChange = () => {
+                const editorElement = cm.getWrapperElement();
+                const rect = editorElement.getBoundingClientRect();
+                if (rect.bottom > window.visualViewport.height) {
+                  editorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              };
+              window.visualViewport.addEventListener('resize', handleViewportChange);
+            }
+          }, 100);
+        });
+
+        // Monitor content changes for backspace detection
+        cm.on('beforeChange', function(cm, changeObj) {
+          if (isHandlingInput) return;
+          
+          const cursor = cm.getCursor();
+          const currentContent = cm.getValue();
+          
+          // Check if this is a backspace operation at line beginning
+          if (changeObj.origin === '+delete' && 
+              changeObj.from.line > 0 && 
+              changeObj.from.ch === 0 && 
+              changeObj.to.ch === 0) {
+            
+            isHandlingInput = true;
+            changeObj.cancel();
+            
+            // Manually handle line merging
+            setTimeout(() => {
+              const prevLine = cm.getLine(changeObj.from.line - 1);
+              const currentLine = cm.getLine(changeObj.from.line);
+              const prevLineEnd = prevLine.length;
+              
+              // Replace the newline with nothing, merging the lines
+              cm.replaceRange(currentLine, 
+                {line: changeObj.from.line - 1, ch: prevLineEnd}, 
+                {line: changeObj.from.line + 1, ch: 0}
+              );
+              
+              // Set cursor position at the merge point
+              cm.setCursor({line: changeObj.from.line - 1, ch: prevLineEnd});
+              
+              isHandlingInput = false;
+            }, 0);
+          }
+        });
+
+        // Direct input monitoring as fallback
+        const textarea = cm.getInputField();
+        if (textarea) {
+          textarea.addEventListener('input', function(e) {
+            if (isHandlingInput) return;
+            
+            setTimeout(() => {
+              const newContent = cm.getValue();
+              const cursor = cm.getCursor();
+              
+              // Detect if lines were merged (content got shorter and we're at start of line)
+              if (newContent.length < lastContent.length && cursor.ch === 0 && cursor.line > 0) {
+                const lines = newContent.split('\n');
+                const lastLines = lastContent.split('\n');
+                
+                // If we lost a line, it might be a backspace at line start
+                if (lines.length < lastLines.length) {
+                  cm.refresh();
+                }
+              }
+              
+              lastContent = newContent;
+            }, 0);
+          });
+
+          // Handle keydown events directly on the textarea
+          textarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' || e.keyCode === 8) {
+              const cursor = cm.getCursor();
+              
+              // If at the beginning of a line
+              if (cursor.ch === 0 && cursor.line > 0) {
+                e.preventDefault();
+                isHandlingInput = true;
+                
+                const prevLine = cm.getLine(cursor.line - 1);
+                const currentLine = cm.getLine(cursor.line);
+                const prevLineEnd = prevLine.length;
+                
+                // Merge lines
+                cm.replaceRange(prevLine + currentLine, 
+                  {line: cursor.line - 1, ch: 0}, 
+                  {line: cursor.line + 1, ch: 0}
+                );
+                
+                // Position cursor at merge point
+                cm.setCursor({line: cursor.line - 1, ch: prevLineEnd});
+                
+                setTimeout(() => {
+                  isHandlingInput = false;
+                  cm.refresh();
+                }, 10);
+              }
+            }
+          });
+        }
+
+        // Handle orientation changes
+        window.addEventListener('orientationchange', () => {
+          setTimeout(() => {
+            cm.refresh();
+          }, 200);
+        });
+
+        // Force periodic refresh on mobile
+        setInterval(() => {
+          if (document.activeElement === textarea) {
+            cm.refresh();
+          }
+        }, 1000);
+      }
+
+      // Add custom CSS for macro syntax highlighting
+      const style = document.createElement('style');
+      style.textContent = `
+        .cm-s-dracula .cm-keyword { color: #ff79c6; font-weight: bold; }
+        .cm-s-dracula .cm-atom { color: #8be9fd; }
+        .cm-s-dracula .cm-number { color: #bd93f9; }
+        .cm-s-dracula .cm-comment { color: #6272a4; font-style: italic; }
+      `;
+      document.head.appendChild(style);
+
+      // Add mobile-specific event handling
+      if (isMobileDevice()) {
+        setupMobileSupport(editor);
         
-        // Update the select dropdown
-        document.getElementById('adapter_select').value = s.preferred || '';
-    }catch(e){console.error(e)}
-}
+        // Additional fallback: mutation observer for content changes
+        const wrapper = editor.getWrapperElement();
+        const observer = new MutationObserver(function(mutations) {
+          mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' || mutation.type === 'characterData') {
+              // Force a refresh after DOM changes
+              setTimeout(() => editor.refresh(), 10);
+            }
+          });
+        });
+        
+        observer.observe(wrapper, {
+          childList: true,
+          subtree: true,
+          characterData: true
+        });
 
-setInterval(updateMacroDetails, 2000);
-setInterval(updateAdapterStatus, 5000);
-let ws = new WebSocket('ws://'+location.host+'/ws');
-ws.onopen = ()=>console.log('ws open');
-ws.onmessage = (e)=>{
-    let m = JSON.parse(e.data);
-    if(m.type==='log'){
-        document.getElementById('log').textContent += m.msg + '\n';
-        document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
-    } else if(m.type==='status'){
-        document.getElementById('status').textContent = 'Status: '+m.msg;
+        // Detect persistent backspace issues and offer fallback
+        let backspaceProblemCount = 0;
+        const textarea = editor.getInputField();
+        
+        if (textarea) {
+          textarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && editor.getCursor().ch === 0 && editor.getCursor().line > 0) {
+              backspaceProblemCount++;
+              
+              if (backspaceProblemCount >= 3) {
+                setTimeout(() => {
+                  if (confirm('Having trouble with backspace? Switch to mobile-optimized editor?')) {
+                    localStorage.setItem('useFallbackEditor', 'true');
+                    location.reload();
+                  }
+                }, 500);
+              }
+            }
+          });
+        }
+      }
     }
-};
-function send(cmd){ ws.send(JSON.stringify({cmd:cmd})); }
-document.getElementById('pause').onclick = ()=>send('pause');
-document.getElementById('resume').onclick = ()=>send('resume');
-document.getElementById('restart').onclick = async ()=>{
-    await fetch('/api/restart_host', {method:'POST'});
-}
-document.getElementById('stop').onclick = async ()=>{
-    await fetch('/api/stop_host', {method:'POST'});
-}
-async function listMacros(){
-    let res = await fetch('/api/macros');
-    if(!res.ok) return;
-    let names = await res.json();
-    let sel = document.getElementById('macro_select');
-    sel.innerHTML = '';
-    names.forEach(n=>{ let o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
-}
-document.getElementById('run_macro').onclick = async ()=>{
-    let sel = document.getElementById('macro_select');
-    let name = sel.value;
-    if(!name) return;
-    await fetch('/api/select', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name:name})});
-}
 
-document.getElementById('save_macro').onclick = async ()=>{
-    let name = document.getElementById('macro_name').value;
-    let content = document.getElementById('macro_editor').value;
-    if(!name) return alert('Enter filename');
-    let res = await fetch('/api/macros', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name:name, content:content})});
-    if(res.ok){
-        await listMacros();
-        alert('Saved');
-    } else {
-        alert('Save failed');
+    // WebSocket management
+    function connectWebSocket() {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+      
+      const wsIndicator = document.getElementById('ws-indicator');
+      const wsStatus = document.getElementById('ws-status');
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        wsIndicator.classList.add('connected');
+        wsStatus.textContent = 'Connected';
+        clearInterval(wsReconnectInterval);
+        addLogMessage('🟢 Connected to server', 'success');
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        wsIndicator.classList.remove('connected');
+        wsStatus.textContent = 'Disconnected';
+        addLogMessage('🔴 Disconnected from server', 'error');
+        
+        // Auto-reconnect
+        wsReconnectInterval = setInterval(() => {
+          addLogMessage('🔄 Attempting to reconnect...', 'info');
+          connectWebSocket();
+        }, 5000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        addLogMessage('❌ Connection error', 'error');
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          handleWebSocketMessage(msg);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
     }
-}
 
-document.getElementById('macro_select').onchange = async ()=>{
-    let name = document.getElementById('macro_select').value;
-    if(!name) return;
-    let res = await fetch('/api/macros/'+encodeURIComponent(name));
-    if(res.ok){
-        let text = await res.text();
-        document.getElementById('macro_editor').value = text;
+    function handleWebSocketMessage(msg) {
+      if (msg.type === 'log') {
+        addLogMessage(msg.msg);
+      } else if (msg.type === 'status') {
+        updateStatus(msg.msg);
+      }
+    }
+
+    // Status management
+    async function updateMacroDetails() {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        
+        const status = await res.json();
+        const details = [
+          `📁 Macro: ${status.name || 'None'}`,
+          `⏱️ Runtime: ${status.runtime || '0:00'}`,
+          `🔄 Iterations: ${status.iterations || 0}`,
+          `⚡ Sec/Iter: ${status.sec_per_iter || 'N/A'}`
+        ].join('\n');
+        
+        document.getElementById('macro_details').textContent = details;
+      } catch (error) {
+        console.error('Failed to update macro details:', error);
+      }
+    }
+
+    async function updateAdapterStatus() {
+      try {
+        const res = await fetch('/api/adapters/status');
+        if (!res.ok) return;
+        
+        const status = await res.json();
+        const preferred = status.preferred || 'auto-detect';
+        const connectivity = status.connectivity || {};
+        
+        const statusLines = [
+          `🔌 Adapter: ${preferred}`,
+          `${connectivity.pico ? '✅' : '❌'} Pico W: ${connectivity.pico ? 'Available' : 'Unavailable'}`,
+          `${connectivity.joycontrol ? '✅' : '❌'} Joycontrol: ${connectivity.joycontrol ? 'Available' : 'Unavailable'}`
+        ];
+        
+        document.getElementById('adapter_status').textContent = statusLines.join('\n');
+        document.getElementById('adapter_select').value = status.preferred || '';
+        
+        // Update status card styling
+        const adapterCard = document.getElementById('adapter_status').closest('.status-card');
+        if (connectivity.pico || connectivity.joycontrol) {
+          adapterCard.classList.remove('error');
+          adapterCard.classList.add('success');
+        } else {
+          adapterCard.classList.remove('success');
+          adapterCard.classList.add('error');
+        }
+      } catch (error) {
+        console.error('Failed to update adapter status:', error);
+      }
+    }
+
+    function updateStatus(statusMsg) {
+      const statusElement = document.getElementById('status');
+      const statusCard = document.getElementById('status-card');
+      
+      statusElement.textContent = `⚡ ${statusMsg}`;
+      
+      // Update status card styling based on status
+      statusCard.classList.remove('success', 'warning', 'error');
+      if (statusMsg.includes('running') || statusMsg.includes('connected')) {
+        statusCard.classList.add('success');
+      } else if (statusMsg.includes('paused') || statusMsg.includes('warning')) {
+        statusCard.classList.add('warning');
+      } else if (statusMsg.includes('error') || statusMsg.includes('failed')) {
+        statusCard.classList.add('error');
+      }
+    }
+
+    // Log management
+    function addLogMessage(message, type = 'info') {
+      const logContent = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'info' ? 'ℹ️' : '📝';
+      
+      logContent.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').textContent = '';
+      addLogMessage('Log cleared');
+    }
+
+    // Macro management
+    async function listMacros() {
+      try {
+        const res = await fetch('/api/macros');
+        if (!res.ok) return;
+        
+        const names = await res.json();
+        const select = document.getElementById('macro_select');
+        select.innerHTML = '<option value="">Choose a macro...</option>';
+        
+        names.forEach(name => {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Failed to list macros:', error);
+        addLogMessage('Failed to load macro list', 'error');
+      }
+    }
+
+    async function loadMacro(name) {
+      if (!name) return;
+      
+      try {
+        const res = await fetch(`/api/macros/${encodeURIComponent(name)}`);
+        if (!res.ok) throw new Error(`Failed to load macro: ${res.status}`);
+        
+        const content = await res.text();
+        editor.setValue(content);
         document.getElementById('macro_name').value = name;
+        currentMacroName = name;
+        
+        addLogMessage(`Loaded macro: ${name}`, 'success');
+      } catch (error) {
+        console.error('Failed to load macro:', error);
+        addLogMessage(`Failed to load macro: ${name}`, 'error');
+      }
     }
-}
 
-document.getElementById('set_adapter').onclick = async ()=>{
-    let adapter = document.getElementById('adapter_select').value || null;
-    let res = await fetch('/api/adapters/select', {
-        method:'POST', 
-        headers:{'content-type':'application/json'}, 
-        body: JSON.stringify({adapter:adapter})
-    });
-    if(res.ok){
-        let result = await res.json();
-        alert(result.message);
-        updateAdapterStatus();
-    } else {
-        alert('Failed to set adapter preference');
+    async function saveMacro() {
+      const name = document.getElementById('macro_name').value.trim();
+      const content = editor.getValue();
+      
+      if (!name) {
+        addLogMessage('Please enter a filename', 'error');
+        return;
+      }
+      
+      if (!name.endsWith('.txt')) {
+        document.getElementById('macro_name').value = name + '.txt';
+      }
+      
+      try {
+        const res = await fetch('/api/macros', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: name.endsWith('.txt') ? name : name + '.txt', content })
+        });
+        
+        if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+        
+        await listMacros();
+        currentMacroName = name;
+        addLogMessage(`Saved macro: ${name}`, 'success');
+        
+        // Update select dropdown
+        document.getElementById('macro_select').value = name;
+      } catch (error) {
+        console.error('Failed to save macro:', error);
+        addLogMessage(`Failed to save macro: ${error.message}`, 'error');
+      }
     }
-}
 
-document.getElementById('test_adapters').onclick = async ()=>{
-    document.getElementById('adapter_status').textContent = 'Testing adapters...';
-    await updateAdapterStatus();
-}
+    function newMacro() {
+      editor.setValue('# New macro\n# Enter your commands here...\n\n');
+      document.getElementById('macro_name').value = '';
+      document.getElementById('macro_select').value = '';
+      currentMacroName = '';
+      addLogMessage('Created new macro', 'info');
+    }
 
-listMacros().catch(e=>console.error(e));
-updateAdapterStatus().catch(e=>console.error(e));
-</script>
+    async function runMacro() {
+      const selectedMacro = document.getElementById('macro_select').value;
+      if (!selectedMacro) {
+        addLogMessage('Please select a macro to run', 'error');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/select', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: selectedMacro })
+        });
+        
+        if (!res.ok) throw new Error(`Failed to run macro: ${res.status}`);
+        
+        addLogMessage(`Started macro: ${selectedMacro}`, 'success');
+      } catch (error) {
+        console.error('Failed to run macro:', error);
+        addLogMessage(`Failed to run macro: ${error.message}`, 'error');
+      }
+    }
+
+    // Control functions
+    function sendCommand(cmd) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ cmd }));
+        addLogMessage(`Sent command: ${cmd}`, 'info');
+      } else {
+        addLogMessage('Not connected to server', 'error');
+      }
+    }
+
+    async function restartHost() {
+      try {
+        const res = await fetch('/api/restart_host', { method: 'POST' });
+        if (!res.ok) throw new Error(`Restart failed: ${res.status}`);
+        addLogMessage('Host restart initiated', 'info');
+      } catch (error) {
+        console.error('Failed to restart host:', error);
+        addLogMessage(`Failed to restart: ${error.message}`, 'error');
+      }
+    }
+
+    async function stopHost() {
+      try {
+        const res = await fetch('/api/stop_host', { method: 'POST' });
+        if (!res.ok) throw new Error(`Stop failed: ${res.status}`);
+        addLogMessage('Host stop initiated', 'info');
+      } catch (error) {
+        console.error('Failed to stop host:', error);
+        addLogMessage(`Failed to stop: ${error.message}`, 'error');
+      }
+    }
+
+    async function setAdapter() {
+      const adapter = document.getElementById('adapter_select').value || null;
+      
+      try {
+        const res = await fetch('/api/adapters/select', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ adapter })
+        });
+        
+        if (!res.ok) throw new Error(`Failed to set adapter: ${res.status}`);
+        
+        const result = await res.json();
+        addLogMessage(result.message, 'success');
+        await updateAdapterStatus();
+      } catch (error) {
+        console.error('Failed to set adapter:', error);
+        addLogMessage(`Failed to set adapter: ${error.message}`, 'error');
+      }
+    }
+
+    async function testAdapters() {
+      const button = document.getElementById('test_adapters');
+      const originalText = button.innerHTML;
+      
+      button.classList.add('loading');
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+      
+      try {
+        addLogMessage('Testing adapter connectivity...', 'info');
+        await updateAdapterStatus();
+        addLogMessage('Adapter test completed', 'success');
+      } catch (error) {
+        console.error('Failed to test adapters:', error);
+        addLogMessage('Adapter test failed', 'error');
+      } finally {
+        button.classList.remove('loading');
+        button.innerHTML = originalText;
+      }
+    }
+
+    // Event listeners
+    function setupEventListeners() {
+      // Control buttons
+      document.getElementById('pause').onclick = () => sendCommand('pause');
+      document.getElementById('resume').onclick = () => sendCommand('resume');
+      document.getElementById('restart').onclick = restartHost;
+      document.getElementById('stop').onclick = stopHost;
+
+      // Macro controls
+      document.getElementById('run_macro').onclick = runMacro;
+      document.getElementById('macro_select').onchange = (e) => loadMacro(e.target.value);
+      document.getElementById('save_macro').onclick = saveMacro;
+      document.getElementById('new_macro').onclick = newMacro;
+
+      // Adapter controls
+      document.getElementById('set_adapter').onclick = setAdapter;
+      document.getElementById('test_adapters').onclick = testAdapters;
+
+      // Log controls
+      document.getElementById('clear-log').onclick = clearLog;
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          e.preventDefault();
+          saveMacro();
+        }
+      });
+    }
+
+    // Initialize application
+    async function initialize() {
+      addLogMessage('Initializing PKMN Autoshine...', 'info');
+      
+      initializeEditor();
+      setupEventListeners();
+      connectWebSocket();
+      
+      // Load initial data
+      await Promise.all([
+        listMacros(),
+        updateAdapterStatus()
+      ]);
+      
+      // Set up periodic updates
+      setInterval(updateMacroDetails, 2000);
+      setInterval(updateAdapterStatus, 30000);
+      
+      addLogMessage('Application initialized successfully!', 'success');
+    }
+
+    // Start the application when page loads
+    document.addEventListener('DOMContentLoaded', initialize);
+  </script>
 </body>
 </html>

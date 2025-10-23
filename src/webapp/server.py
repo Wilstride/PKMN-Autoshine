@@ -50,6 +50,11 @@ async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int 
 
     app.router.add_get('/', handlers.index)
     app.router.add_get('/ws', handlers.websocket_handler)
+    
+    # Add static file routes
+    import pathlib
+    static_dir = pathlib.Path(__file__).parent / 'static'
+    app.router.add_static('/static/', static_dir, name='static')
     app.router.add_get('/api/macros', handlers.api_list_macros)
     app.router.add_get('/api/macros/{name}', handlers.api_get_macro)
     app.router.add_post('/api/macros', handlers.api_save_macro)
