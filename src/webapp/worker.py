@@ -190,11 +190,8 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         if runner.is_running():
                             broadcast_log(logs_qs, 'Pausing macro - will stop after current iteration completes...', 'warning')
                             await runner.pause()
-                            # Wait a short time for the graceful pause to take effect
-                            await asyncio.sleep(1.0)
-                            if runner.is_running():
-                                await runner.stop()
-                            broadcast_log(logs_qs, 'Macro stopped gracefully. Click Run to start again.', 'info')
+                            # Don't force stop - let the MacroRunner handle graceful pause naturally
+                            broadcast_log(logs_qs, 'Pause requested - macro will stop after current iteration.', 'info')
                         else:
                             broadcast_log(logs_qs, 'No macro is currently running', 'warning')
                     except Exception as e:
@@ -279,12 +276,14 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         text = mpath.read_text()
                         new_commands = parse_macro(text)
                         
-                        # Set single-run mode and run once
+                        # Set single-run mode and prepare runner
                         runner.set_commands(new_commands)
                         runner.set_setup_commands(None)  # No setup for single runs
                         
-                        # Execute the commands once without repeating
+                        # Stop any existing macro
                         await runner.stop()
+                        
+                        # Update status
                         try:
                             app_status.name = name
                             app_status.start_time = time.time()
@@ -297,8 +296,19 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         except Exception:
                             pass
                         
-                        # Run once and stop
-                        await runner.run_once()
+                        # Create a cancellable task for run_once
+                        async def run_once_task():
+                            await runner.run_once()
+                        
+                        run_once_task_ref = asyncio.create_task(run_once_task())
+                        runner._task = run_once_task_ref  # Store task reference for force_stop
+                        
+                        try:
+                            await run_once_task_ref
+                        except asyncio.CancelledError:
+                            broadcast_log(logs_qs, f'Run-once macro {name} was force stopped', 'warning')
+                        finally:
+                            runner._task = None
                         
                         msg = f'Executed macro once: {name} ({len(new_commands)} commands)'
                         for q in logs_qs:

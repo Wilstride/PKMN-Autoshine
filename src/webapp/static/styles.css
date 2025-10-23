@@ -13,10 +13,10 @@
   --bg-card: #3a3a3a;
   --text-primary: #ffffff;
   --text-secondary: #b3b3b3;
-  --accent-primary: #4a9eff;
-  --accent-success: #00d764;
-  --accent-warning: #ff9500;
-  --accent-danger: #ff3b30;
+  --accent-primary: #2563eb;
+  --accent-success: #16a34a;
+  --accent-warning: #d97706;
+  --accent-danger: #dc2626;
   --border-color: #4a4a4a;
   --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
@@ -138,15 +138,15 @@ body {
 
 .macro-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
   margin-top: 12px;
 }
 
 @media (max-width: 768px) {
   .macro-actions {
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }
 
@@ -191,7 +191,7 @@ button.danger {
 }
 
 button.danger:hover {
-  box-shadow: 0 6px 12px rgba(255, 59, 48, 0.3);
+  box-shadow: 0 6px 12px rgba(220, 38, 38, 0.3);
 }
 
 button.success {
@@ -199,7 +199,7 @@ button.success {
 }
 
 button.success:hover {
-  box-shadow: 0 6px 12px rgba(0, 215, 100, 0.3);
+  box-shadow: 0 6px 12px rgba(22, 163, 74, 0.3);
 }
 
 button.warning {
@@ -207,7 +207,23 @@ button.warning {
 }
 
 button.warning:hover {
-  box-shadow: 0 6px 12px rgba(255, 149, 0, 0.3);
+  box-shadow: 0 6px 12px rgba(217, 119, 6, 0.3);
+}
+
+button.primary {
+  background: var(--accent-primary);
+}
+
+button.primary:hover {
+  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3);
+}
+
+button.secondary {
+  background: #6b7280;
+}
+
+button.secondary:hover {
+  box-shadow: 0 6px 12px rgba(107, 114, 128, 0.3);
 }
 
 .status-display {

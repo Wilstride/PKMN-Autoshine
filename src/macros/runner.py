@@ -209,7 +209,8 @@ class MacroRunner:
                             self.log_queue.put_nowait(f'=== iteration {iteration} start ===')
                         except Exception:
                             pass
-                    await run_commands(self.adapter, self._commands, log_queue=self.log_queue, pause_event=self._pause_event, stop_event=self._stop_event)
+                    # Don't pass pause_event to run_commands for graceful pause - let iteration complete
+                    await run_commands(self.adapter, self._commands, log_queue=self.log_queue, stop_event=self._stop_event)
                     
                     # Check for graceful pause after iteration completes
                     if not self._graceful_pause_event.is_set():
@@ -340,7 +341,9 @@ class MacroRunner:
                 except Exception:
                     pass
             
-            await run_commands(self.adapter, self._commands, log_queue=self.log_queue)
+            # Pass stop and pause events to allow interruption during run_once
+            await run_commands(self.adapter, self._commands, log_queue=self.log_queue, 
+                             pause_event=self._pause_event, stop_event=self._stop_event)
             
             if self.log_queue is not None:
                 try:
