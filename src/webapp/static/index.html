@@ -514,9 +514,13 @@ SLEEP 0.1`;
           showAlert(status.iterations);
         }
         
-        // Update alert interval UI if it changed
+        // Update alert interval UI if it changed (but don't overwrite if user is editing)
         if (status.alert_interval !== undefined) {
-          document.getElementById('alert_interval').value = status.alert_interval;
+          const alertInput = document.getElementById('alert_interval');
+          // Only update if the input is not currently focused (being edited)
+          if (document.activeElement !== alertInput) {
+            alertInput.value = status.alert_interval;
+          }
         }
       } catch (error) {
         console.error('Failed to update macro details:', error);
@@ -886,6 +890,7 @@ SLEEP 0.1`;
     function showAlert(iterations) {
       const enableNotifications = document.getElementById('enable_notifications').checked;
       const enableSound = document.getElementById('enable_sound').checked;
+      const pauseOnAlert = document.getElementById('pause_on_alert').checked;
       
       const message = `Macro completed ${iterations} iterations`;
       
@@ -902,6 +907,12 @@ SLEEP 0.1`;
       // Play sound
       if (enableSound) {
         playAlertSound();
+      }
+      
+      // Pause macro if enabled
+      if (pauseOnAlert) {
+        ws.send(JSON.stringify({action: 'pause'}));
+        addLogMessage(`⏸️ Macro paused automatically due to alert at ${iterations} iterations`, 'warning');
       }
       
       // Also show in log
@@ -1099,29 +1110,39 @@ SLEEP 0.1`;
         <button class="modal-close" id="settings-close">&times;</button>
       </div>
       <div class="modal-body">
+        <!-- Alert Configuration -->
         <div class="settings-section">
-          <h3><i class="fas fa-bell"></i> Alert Settings</h3>
+          <h3><i class="fas fa-bell"></i> Notifications</h3>
           <div class="form-group">
-            <label for="alert_interval">Alert every X iterations (0 = disabled):</label>
-            <input type="number" id="alert_interval" value="0" min="0" max="10000" step="1" style="width: 100px;">
+            <label for="alert_interval">Interval (0 = off):</label>
+            <div class="input-with-unit">
+              <input type="number" id="alert_interval" value="0" min="0" max="10000" step="1" style="width: 80px;">
+              <small>iterations</small>
+            </div>
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" id="enable_notifications" checked> Enable browser notifications
+              <input type="checkbox" id="enable_notifications" checked> Browser alerts
             </label>
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" id="enable_sound" checked> Enable sound alerts
+              <input type="checkbox" id="enable_sound" checked> Sound effects
             </label>
           </div>
-          <button id="set_alerts"><i class="fas fa-bell"></i> Set Alerts</button>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="pause_on_alert"> Pause on alert
+            </label>
+          </div>
+          <button id="set_alerts"><i class="fas fa-save"></i> Apply</button>
         </div>
 
+        <!-- Adapter Configuration -->
         <div class="settings-section">
-          <h3><i class="fas fa-plug"></i> Adapter Settings</h3>
+          <h3><i class="fas fa-plug"></i> Adapter</h3>
           <div class="form-group">
-            <label for="adapter_select">Preferred Adapter:</label>
+            <label for="adapter_select">Controller Type:</label>
             <select id="adapter_select">
               <option value="">Auto-detect (Pico first)</option>
               <option value="pico">Pico W (USB Serial)</option>
@@ -1142,9 +1163,9 @@ SLEEP 0.1`;
               <span class="status-value" id="macro_status">Ready</span>
             </div>
           </div>
-          <div style="display: flex; gap: 8px; margin-top: 12px;">
-            <button id="set_adapter"><i class="fas fa-check"></i> Set</button>
-            <button id="test_adapters"><i class="fas fa-wifi"></i> Test</button>
+          <div class="button-group">
+            <button id="set_adapter"><i class="fas fa-check"></i> Apply</button>
+            <button id="test_adapters"><i class="fas fa-search"></i> Test</button>
           </div>
         </div>
       </div>

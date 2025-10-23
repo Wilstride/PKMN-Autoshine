@@ -305,6 +305,7 @@ select:focus, input[type="text"]:focus {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 400px;
 }
 
 .editor-header {
@@ -323,7 +324,7 @@ select:focus, input[type="text"]:focus {
   border: 2px solid var(--border-color);
   border-radius: 8px;
   font-size: 14px;
-  height: 400px;
+  flex-grow: 1;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
@@ -364,6 +365,9 @@ select:focus, input[type="text"]:focus {
 .logs-panel {
   grid-column: 1 / -1;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
 }
 
 .logs-header {
@@ -408,8 +412,7 @@ select:focus, input[type="text"]:focus {
   font-size: 13px;
   line-height: 1.5;
   padding: 16px;
-  min-height: 60px;
-  max-height: 300px;
+  flex-grow: 1;
   overflow-y: auto;
   white-space: pre-wrap;
   border-radius: 0 0 12px 12px;
@@ -528,21 +531,126 @@ select:focus, input[type="text"]:focus {
 }
 
 /* Settings panel */
-.settings-panel .settings-section {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border-color);
+.settings-section {
+  margin-bottom: 32px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
 }
 
-.settings-panel .settings-section:last-child {
-  border-bottom: none;
+.settings-section:last-child {
   margin-bottom: 0;
 }
 
-.settings-panel h3 {
-  font-size: 1rem;
-  margin-bottom: 12px;
+.settings-section h3 {
+  font-size: 1.1rem;
+  margin: 0 0 16px 0;
   color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.adapter-status {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.adapter-status .status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.adapter-status .status-item:last-child {
+  border-bottom: none;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-section .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-section .form-group label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-section .form-group input[type="checkbox"] {
+  margin-right: 8px;
+  accent-color: var(--accent-primary);
+}
+
+.settings-section .form-group small {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-left: 4px;
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-section select, .settings-section input[type="number"] {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.settings-section select:focus, .settings-section input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.settings-section button {
+  background: var(--accent-primary);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.settings-section button:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
 }
 
 /* Macro manager */
