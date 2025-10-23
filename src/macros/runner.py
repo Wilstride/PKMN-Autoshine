@@ -241,12 +241,24 @@ class MacroRunner:
     async def stop(self):
         if not self.is_running():
             return
+            
+        if self.log_queue is not None:
+            try:
+                self.log_queue.put_nowait('=== stopping macro ===')
+            except Exception:
+                pass
+        
+        # Signal stop and unblock any pauses
         self._stop_event.set()
         self._pause_event.set()
+        self._graceful_pause_event.set()
+        
         try:
             await self._task
         finally:
             self._task = None
+        
+        # Clean up adapter state
         try:
             await self.adapter.release_all_buttons()
         except Exception:
@@ -258,7 +270,13 @@ class MacroRunner:
 
     async def pause(self):
         """Gracefully pause after current iteration completes."""
-        self._graceful_pause_event.clear()
+        if self.is_running():
+            self._graceful_pause_event.clear()
+            if self.log_queue is not None:
+                try:
+                    self.log_queue.put_nowait('=== graceful pause requested ===')
+                except Exception:
+                    pass
 
     def resume(self):
         """Resume from pause."""
@@ -269,13 +287,31 @@ class MacroRunner:
         """Immediately stop macro execution regardless of current state."""
         if not self.is_running():
             return
+        
+        if self.log_queue is not None:
+            try:
+                self.log_queue.put_nowait('=== force stop requested ===')
+            except Exception:
+                pass
+        
+        # Set all events to stop execution immediately
         self._stop_event.set()
-        self._pause_event.set()
-        self._graceful_pause_event.set()
-        try:
-            await self._task
-        finally:
-            self._task = None
+        self._pause_event.set()  # Unblock any pause waits
+        self._graceful_pause_event.set()  # Unblock any graceful pause waits
+        
+        # Cancel the task if it's still running
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+        
+        self._task = None
+        
+        # Clean up adapter state
         try:
             await self.adapter.release_all_buttons()
         except Exception:

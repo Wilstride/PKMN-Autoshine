@@ -21,41 +21,42 @@ async def websocket_handler(request):
     await ws.prepare(request)
     app = request.app
     cmd_q: 'queue.Queue' = app['cmd_q']
-    logs_q: 'queue.Queue' = app['logs_ws_q']
+    log_buffer = app['log_buffer']
+    websocket_connections = app['websocket_connections']
+
+    # Add this connection to the broadcast list
+    websocket_connections.add(ws)
 
     await ws.send_str(json.dumps({'type':'status','msg': 'connected'}))
 
-    loop = asyncio.get_event_loop()
-
-    async def log_forwarder():
-        while True:
+    # Send recent logs from buffer to new connection
+    with log_buffer['lock']:
+        for buffered_log in log_buffer['logs']:
             try:
-                msg = await loop.run_in_executor(None, logs_q.get)
-                if isinstance(msg, dict):
-                    # Message is already structured
-                    await ws.send_str(json.dumps(msg))
+                if isinstance(buffered_log, dict):
+                    await ws.send_str(json.dumps(buffered_log))
                 else:
-                    # Legacy string message
-                    await ws.send_str(json.dumps({'type':'log','message': msg}))
+                    await ws.send_str(json.dumps({'type':'log','message': buffered_log}))
             except Exception:
                 break
 
-    forwarder = asyncio.create_task(log_forwarder())
+    try:
+        async for msg in ws:
+            if msg.type == WSMsgType.TEXT:
+                try:
+                    data = json.loads(msg.data)
+                except Exception:
+                    data = {'cmd': msg.data}
+                cmd = data.get('cmd')
+                if cmd in ('pause', 'resume', 'restart', 'stop', 'force_stop'):
+                    cmd_q.put(cmd)
+                    await ws.send_str(json.dumps({'type':'status','msg': cmd}))
+            elif msg.type == WSMsgType.ERROR:
+                break
+    finally:
+        # Remove connection from broadcast list when client disconnects
+        websocket_connections.discard(ws)
 
-    async for msg in ws:
-        if msg.type == WSMsgType.TEXT:
-            try:
-                data = json.loads(msg.data)
-            except Exception:
-                data = {'cmd': msg.data}
-            cmd = data.get('cmd')
-            if cmd in ('pause', 'resume', 'restart', 'stop'):
-                cmd_q.put(cmd)
-                await ws.send_str(json.dumps({'type':'status','msg': cmd}))
-        elif msg.type == WSMsgType.ERROR:
-            break
-
-    forwarder.cancel()
     return ws
 
 

@@ -187,21 +187,18 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                 broadcast_log(logs_qs, f'worker: got cmd: {cmd}', 'info')
                 if cmd == 'pause':
                     try:
-                        try:
-                            app_status.paused = True
-                            app_status.pause_start = time.time()
-                        except Exception:
-                            pass
-                        await runner.pause()
+                        if runner.is_running():
+                            broadcast_log(logs_qs, 'Pausing macro - will stop after current iteration completes...', 'warning')
+                            await runner.pause()
+                            # Wait a short time for the graceful pause to take effect
+                            await asyncio.sleep(1.0)
+                            if runner.is_running():
+                                await runner.stop()
+                            broadcast_log(logs_qs, 'Macro stopped gracefully. Click Run to start again.', 'info')
+                        else:
+                            broadcast_log(logs_qs, 'No macro is currently running', 'warning')
                     except Exception as e:
-                        for q in logs_qs:
-                            try:
-                                q.put_nowait(f'Error pausing runner: {e}')
-                            except Exception:
-                                try:
-                                    q.put(f'Error pausing runner: {e}')
-                                except Exception:
-                                    pass
+                        broadcast_log(logs_qs, f'Error pausing runner: {e}', 'error')
                 elif cmd == 'resume':
                     try:
                         if app_status.paused and app_status.pause_start is not None:
@@ -228,8 +225,11 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                     await runner.stop()
                     break
                 elif cmd == 'force_stop':
-                    await runner.force_stop()
-                    break
+                    try:
+                        await runner.force_stop()
+                        broadcast_log(logs_qs, 'Macro force stopped', 'warning')
+                    except Exception as e:
+                        broadcast_log(logs_qs, f'Error force stopping: {e}', 'error')
                 elif isinstance(cmd, str) and cmd.startswith('adapter:'):
                     # Handle adapter switching - this would require restarting the entire worker
                     # For now, just log it - full implementation would require more complex worker management
