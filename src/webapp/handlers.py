@@ -89,10 +89,19 @@ async def api_save_macro(request):
 async def api_select_macro(request):
     data = await request.json()
     name = data.get('name')
+    setup_name = data.get('setup_name')
+    
     if not name:
         return web.Response(status=400, text='name required')
+    
     cmd_q: 'queue.Queue' = request.app['cmd_q']
-    cmd_q.put(f'load:{name}')
+    
+    # Send both setup and main macro names
+    if setup_name:
+        cmd_q.put(f'load:{name}:{setup_name}')
+    else:
+        cmd_q.put(f'load:{name}')
+    
     return web.Response(status=200)
 
 

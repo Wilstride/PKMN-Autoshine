@@ -22,6 +22,7 @@ The Pico W acts as a bridge, converting USB serial commands into authentic Ninte
 - **USB Serial Interface**: Send commands from any host system via standard serial communication
 - **Bluetooth Controller Emulation**: Full Nintendo Switch Pro Controller compatibility via Bluetooth
 - **Command Language**: Simple text-based command format for buttons, sticks, and timing
+- **Setup Macro Support**: Configure one-time initialization macros that run before your main automation loop
 - **Real-time Processing**: Low-latency command execution for responsive automation
 - **Cross-platform Host**: Works with any system that supports USB serial (Linux, Windows, macOS)
 
@@ -58,8 +59,13 @@ PKMN-Autoshine automatically detects and uses the best available adapter:
 # Check adapter status first (recommended)
 python src/check_status.py
 
-# Run automation (automatically detects and uses Pico W)
-python cli.py
+# Run automation with a main macro (automatically detects and uses Pico W)
+python cli.py plza_travel_cafe.txt
+
+# Run automation with setup and main macro
+python cli.py plza_travel_cafe.txt --setup system_open_game.txt
+
+# The setup macro runs once before the main macro starts repeating
 ```
 
 ### Option B: Joycontrol Fallback (Linux Only)
@@ -68,15 +74,18 @@ If no Pico W is detected, the system automatically falls back to joycontrol:
 
 1. Install dependencies: `sudo apt install python3-dbus libhidapi-hidraw0 libbluetooth-dev bluez`
 2. Configure Bluetooth as per [joycontrol documentation](https://github.com/Poohl/joycontrol)
-3. Run: `python cli.py` (will automatically use joycontrol if Pico W unavailable)
+3. Run: `python cli.py main_macro.txt` (will automatically use joycontrol if Pico W unavailable)
 
 ### Manual Adapter Selection
 
 You can force specific adapters if needed:
 
 ```bash
-# Force Pico W adapter
-python cli.py --adapter pico data/macros/plza_travel_cafe.txt
+# Force Pico W adapter with setup macro
+python cli.py plza_travel_cafe.txt --setup system_open_game.txt
+
+# Force joycontrol adapter  
+python cli.py plza_travel_cafe.txt --adapter joycontrol
 
 # Force joycontrol adapter  
 python cli.py --adapter joycontrol data/macros/plza_travel_cafe.txt
@@ -114,6 +123,9 @@ python web.py --adapter joycontrol
   - "Auto-detect (Pico first)" - Default behavior
   - "Pico W (USB Serial)" - Force Pico adapter
   - "Joycontrol (Bluetooth)" - Force joycontrol adapter
+- **Macro Selection**: Choose both setup and main macros:
+  - "Setup Macro (runs once)" - Optional initialization macro
+  - "Main Macro (repeats)" - Required repeating automation macro
 - **Test Connectivity**: Button to test which adapters are available
 - **Real-time Updates**: Status updates every 5 seconds
 

@@ -216,14 +216,31 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                             except Exception:
                                 pass
                 elif isinstance(cmd, str) and cmd.startswith('load:'):
-                    name = cmd.split(':',1)[1]
+                    parts = cmd.split(':', 2)  # Split into at most 3 parts: 'load', name, setup_name
+                    name = parts[1] if len(parts) > 1 else ''
+                    setup_name = parts[2] if len(parts) > 2 else None
+                    
                     try:
                         from pathlib import Path
                         # load macros from the data directory to avoid mixing code and data
-                        mpath = Path(pathlib.Path(__file__).parent.parent.parent) / 'data' / 'macros' / Path(name).name
+                        base_path = Path(pathlib.Path(__file__).parent.parent.parent) / 'data' / 'macros'
+                        
+                        # Load main macro
+                        mpath = base_path / Path(name).name
                         text = mpath.read_text()
                         new_commands = parse_macro(text)
                         runner.set_commands(new_commands)
+                        
+                        # Load setup macro if specified
+                        setup_commands = None
+                        if setup_name:
+                            setup_path = base_path / Path(setup_name).name
+                            setup_text = setup_path.read_text()
+                            setup_commands = parse_macro(setup_text)
+                            runner.set_setup_commands(setup_commands)
+                        else:
+                            runner.set_setup_commands(None)
+                        
                         await runner.restart()
                         try:
                             app_status.name = name
@@ -236,12 +253,19 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                             app_status.paused_total = 0.0
                         except Exception:
                             pass
+                        
+                        # Log the loaded macros
+                        if setup_name:
+                            msg = f'Loaded macros: setup={setup_name} ({len(setup_commands)} commands), main={name} ({len(new_commands)} commands)'
+                        else:
+                            msg = f'Loaded macro: {name} ({len(new_commands)} commands)'
+                        
                         for q in logs_qs:
                             try:
-                                q.put_nowait(f'Loaded macro: {name} ({len(new_commands)} commands)')
+                                q.put_nowait(msg)
                             except Exception:
                                 try:
-                                    q.put(f'Loaded macro: {name} ({len(new_commands)} commands)')
+                                    q.put(msg)
                                 except Exception:
                                     pass
                     except Exception as e:

@@ -134,6 +134,7 @@ class MacroRunner:
         self.adapter = adapter
         self._task = None
         self._commands = None
+        self._setup_commands = None
         self.log_queue: Queue | None = None
         self._pause_event = Event()
         self._pause_event.set()
@@ -141,6 +142,10 @@ class MacroRunner:
 
     def set_commands(self, commands: List[Tuple[str, List[str]]]):
         self._commands = commands
+
+    def set_setup_commands(self, setup_commands: List[Tuple[str, List[str]]]):
+        """Set commands to run once before the main macro loop starts."""
+        self._setup_commands = setup_commands
 
     def logs(self) -> Queue:
         if self.log_queue is None:
@@ -166,6 +171,32 @@ class MacroRunner:
         self._pause_event.set()
 
         async def _loop():
+            # Run setup commands once if they exist
+            if self._setup_commands is not None and len(self._setup_commands) > 0:
+                try:
+                    if self.log_queue is not None:
+                        try:
+                            self.log_queue.put_nowait('=== running setup macro ===')
+                        except Exception:
+                            pass
+                    await run_commands(self.adapter, self._setup_commands, log_queue=self.log_queue, pause_event=self._pause_event, stop_event=self._stop_event)
+                    if self.log_queue is not None:
+                        try:
+                            self.log_queue.put_nowait('=== setup macro completed ===')
+                        except Exception:
+                            pass
+                except Exception as e:
+                    if self.log_queue is not None:
+                        try:
+                            self.log_queue.put_nowait(f'Error during setup macro: {e}')
+                        except Exception:
+                            pass
+                    else:
+                        print(f'Error during setup macro: {e}')
+                    # Don't continue to main loop if setup fails
+                    return
+
+            # Main macro loop
             iteration = 0
             while not self._stop_event.is_set():
                 iteration += 1
