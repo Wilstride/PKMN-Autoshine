@@ -60,8 +60,6 @@ async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int 
     app.router.add_post('/api/macros', handlers.api_save_macro)
     app.router.add_post('/api/select', handlers.api_select_macro)
     app.router.add_post('/api/stop', handlers.api_stop)
-    app.router.add_post('/api/restart_host', handlers.api_restart_host)
-    app.router.add_post('/api/stop_host', handlers.api_stop_host)
     app.router.add_get('/api/adapters', handlers.api_list_adapters)
     app.router.add_get('/api/adapters/status', handlers.api_adapter_status)
     app.router.add_post('/api/adapters/select', handlers.api_select_adapter)

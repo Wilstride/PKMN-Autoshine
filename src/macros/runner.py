@@ -139,6 +139,8 @@ class MacroRunner:
         self._pause_event = Event()
         self._pause_event.set()
         self._stop_event = Event()
+        self._graceful_pause_event = Event()
+        self._graceful_pause_event.set()
 
     def set_commands(self, commands: List[Tuple[str, List[str]]]):
         self._commands = commands
@@ -169,6 +171,7 @@ class MacroRunner:
             return
         self._stop_event.clear()
         self._pause_event.set()
+        self._graceful_pause_event.set()
 
         async def _loop():
             # Run setup commands once if they exist
@@ -207,6 +210,22 @@ class MacroRunner:
                         except Exception:
                             pass
                     await run_commands(self.adapter, self._commands, log_queue=self.log_queue, pause_event=self._pause_event, stop_event=self._stop_event)
+                    
+                    # Check for graceful pause after iteration completes
+                    if not self._graceful_pause_event.is_set():
+                        if self.log_queue is not None:
+                            try:
+                                self.log_queue.put_nowait(f'=== pausing after iteration {iteration} ===')
+                            except Exception:
+                                pass
+                        # Release controls and wait for resume
+                        try:
+                            await self.adapter.release_all_buttons()
+                            await self.adapter.center_sticks()
+                        except Exception:
+                            pass
+                        await self._graceful_pause_event.wait()
+                        
                 except Exception as e:
                     if self.log_queue is not None:
                         try:
@@ -238,7 +257,25 @@ class MacroRunner:
             pass
 
     async def pause(self):
-        self._pause_event.clear()
+        """Gracefully pause after current iteration completes."""
+        self._graceful_pause_event.clear()
+
+    def resume(self):
+        """Resume from pause."""
+        self._pause_event.set()
+        self._graceful_pause_event.set()
+
+    async def force_stop(self):
+        """Immediately stop macro execution regardless of current state."""
+        if not self.is_running():
+            return
+        self._stop_event.set()
+        self._pause_event.set()
+        self._graceful_pause_event.set()
+        try:
+            await self._task
+        finally:
+            self._task = None
         try:
             await self.adapter.release_all_buttons()
         except Exception:
@@ -247,10 +284,3 @@ class MacroRunner:
             await self.adapter.center_sticks()
         except Exception:
             pass
-
-    def resume(self):
-        self._pause_event.set()
-
-    async def restart(self):
-        await self.stop()
-        await self.start()

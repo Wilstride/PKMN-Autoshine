@@ -117,24 +117,6 @@ async def api_stop(request):
     return web.Response(status=200)
 
 
-async def api_restart_host(request):
-    import subprocess
-    try:
-        subprocess.Popen(['sudo', 'shutdown', '-r', 'now'])
-    except Exception as e:
-        return web.Response(status=500, text=str(e))
-    return web.Response(status=200)
-
-
-async def api_stop_host(request):
-    import subprocess
-    try:
-        subprocess.Popen(['sudo', 'shutdown', '-h', 'now'])
-    except Exception as e:
-        return web.Response(status=500, text=str(e))
-    return web.Response(status=200)
-
-
 async def api_list_adapters(request):
     """List available adapter types."""
     try:

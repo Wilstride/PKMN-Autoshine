@@ -222,7 +222,8 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                     runner.resume()
                 elif cmd == 'restart':
                     try:
-                        await runner.restart()
+                        await runner.stop()
+                        await runner.start()
                     except Exception as e:
                         for q in logs_qs:
                             try:
@@ -234,6 +235,9 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                                     pass
                 elif cmd == 'stop':
                     await runner.stop()
+                    break
+                elif cmd == 'force_stop':
+                    await runner.force_stop()
                     break
                 elif isinstance(cmd, str) and cmd.startswith('adapter:'):
                     # Handle adapter switching - this would require restarting the entire worker
@@ -297,7 +301,8 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         else:
                             runner.set_setup_commands(None)
                         
-                        await runner.restart()
+                        await runner.stop()
+                        await runner.start()
                         try:
                             app_status.name = name
                             app_status.start_time = None

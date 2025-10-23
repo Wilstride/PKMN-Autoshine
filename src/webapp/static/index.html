@@ -24,10 +24,9 @@
       
       <div class="controls-section">
         <div class="button-group">
-          <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause</button>
+          <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause (Finish Current)</button>
           <button id="resume" class="success"><i class="fas fa-play"></i> Resume</button>
-          <button id="restart" class="warning"><i class="fas fa-redo"></i> Restart</button>
-          <button id="stop" class="danger"><i class="fas fa-stop"></i> Stop</button>
+          <button id="force_stop" class="danger"><i class="fas fa-stop-circle"></i> Force Stop</button>
         </div>
       </div>
 
@@ -808,28 +807,6 @@ SLEEP 0.1`;
       }
     }
 
-    async function restartHost() {
-      try {
-        const res = await fetch('/api/restart_host', { method: 'POST' });
-        if (!res.ok) throw new Error(`Restart failed: ${res.status}`);
-        addLogMessage('Host restart initiated', 'info');
-      } catch (error) {
-        console.error('Failed to restart host:', error);
-        addLogMessage(`Failed to restart: ${error.message}`, 'error');
-      }
-    }
-
-    async function stopHost() {
-      try {
-        const res = await fetch('/api/stop_host', { method: 'POST' });
-        if (!res.ok) throw new Error(`Stop failed: ${res.status}`);
-        addLogMessage('Host stop initiated', 'info');
-      } catch (error) {
-        console.error('Failed to stop host:', error);
-        addLogMessage(`Failed to stop: ${error.message}`, 'error');
-      }
-    }
-
     // Alert functions
     async function setAlerts() {
       const interval = parseInt(document.getElementById('alert_interval').value) || 0;
@@ -957,8 +934,7 @@ SLEEP 0.1`;
       // Control buttons
       document.getElementById('pause').onclick = () => sendCommand('pause');
       document.getElementById('resume').onclick = () => sendCommand('resume');
-      document.getElementById('restart').onclick = restartHost;
-      document.getElementById('stop').onclick = stopHost;
+      document.getElementById('force_stop').onclick = () => sendCommand('force_stop');
 
       // Macro controls
       document.getElementById('run_macro').onclick = runMacro;
