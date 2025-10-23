@@ -334,6 +334,11 @@ class MacroRunner:
                     pass
             return
 
+        # Ensure pause events are in correct state for run_once
+        self._pause_event.set()
+        self._graceful_pause_event.set()
+        self._stop_event.clear()
+
         try:
             if self.log_queue is not None:
                 try:
@@ -341,9 +346,10 @@ class MacroRunner:
                 except Exception:
                     pass
             
-            # Pass stop and pause events to allow interruption during run_once
+            # Only pass stop_event to allow force stopping, but not pause_event 
+            # since run_once should complete without being paused
             await run_commands(self.adapter, self._commands, log_queue=self.log_queue, 
-                             pause_event=self._pause_event, stop_event=self._stop_event)
+                             stop_event=self._stop_event)
             
             if self.log_queue is not None:
                 try:
