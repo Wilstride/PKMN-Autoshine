@@ -1000,9 +1000,8 @@ SLEEP 0.1`;
       // Modal controls
       document.getElementById('modal-close').onclick = hideModal;
       document.getElementById('cancel_edit').onclick = hideModal;
-      document.getElementById('macro-modal').onclick = (e) => {
-        if (e.target.id === 'macro-modal') hideModal();
-      };
+      // Removed click-outside-to-close to prevent accidental loss of changes
+      // Modal can only be closed via X button, Save, or Cancel buttons
       
       // Settings modal controls
       document.getElementById('settings-toggle').onclick = showSettings;
