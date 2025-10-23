@@ -185,3 +185,28 @@ async def api_select_adapter(request):
         })
     except Exception as e:
         return web.Response(status=500, text=str(e))
+
+
+async def api_set_alerts(request):
+    """Set alert interval for iteration notifications."""
+    try:
+        data = await request.json()
+        alert_interval = data.get('alert_interval', 0)
+        
+        # Validate alert interval
+        if not isinstance(alert_interval, int) or alert_interval < 0:
+            return web.Response(status=400, text='Alert interval must be a non-negative integer')
+        
+        if alert_interval > 10000:
+            return web.Response(status=400, text='Alert interval cannot exceed 10000')
+        
+        # Send command to worker to set alert interval
+        cmd_q: 'queue.Queue' = request.app['cmd_q']
+        cmd_q.put(f'alert:{alert_interval}')
+        
+        return web.json_response({
+            'alert_interval': alert_interval,
+            'message': f'Alert interval set to {alert_interval} iterations' if alert_interval > 0 else 'Alerts disabled'
+        })
+    except Exception as e:
+        return web.Response(status=500, text=str(e))

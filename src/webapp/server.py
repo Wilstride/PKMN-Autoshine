@@ -65,6 +65,7 @@ async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int 
     app.router.add_get('/api/adapters', handlers.api_list_adapters)
     app.router.add_get('/api/adapters/status', handlers.api_adapter_status)
     app.router.add_post('/api/adapters/select', handlers.api_select_adapter)
+    app.router.add_post('/api/alerts/set', handlers.api_set_alerts)
 
     async def api_status(request):
         return web.json_response(request.app['macro_status'].to_dict())

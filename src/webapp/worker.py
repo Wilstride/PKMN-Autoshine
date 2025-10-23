@@ -27,6 +27,9 @@ class MacroStatus:
         self.paused = False
         self.pause_start = None
         self.paused_total = 0.0
+        self.alert_interval = 0  # 0 = disabled, >0 = alert every N iterations
+        self.last_alert_iteration = 0
+        self.pending_alert = False  # Flag to indicate alert should be sent to client
     def to_dict(self):
         runtime = '-'
         if self.start_time is not None:
@@ -37,12 +40,30 @@ class MacroStatus:
             dt = int(now - self.start_time - total_paused)
             h, m, s = dt//3600, (dt%3600)//60, dt%60
             runtime = f"{h:02}:{m:02}:{s:02}"
-        return {
+        
+        result = {
             'name': self.name,
             'runtime': runtime,
             'iterations': self.iterations,
             'sec_per_iter': round(self.sec_per_iter, 2) if self.sec_per_iter is not None else None,
+            'alert_interval': self.alert_interval,
         }
+        
+        # Include alert flag if there's a pending alert
+        if self.pending_alert:
+            result['pending_alert'] = True
+            self.pending_alert = False  # Clear the flag after including it
+            
+        return result
+    
+    def check_and_trigger_alert(self):
+        """Check if an alert should be triggered based on iteration count."""
+        if self.alert_interval > 0 and self.iterations > 0:
+            if self.iterations - self.last_alert_iteration >= self.alert_interval:
+                self.pending_alert = True
+                self.last_alert_iteration = self.iterations
+                return True
+        return False
 
 
 async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: list, status: Optional[MacroStatus]=None, preferred_adapter: Optional[str]=None):
@@ -130,6 +151,17 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                             st.sec_per_iter = now - st.last_iter_time
                         st.last_iter_time = now
                         st.iterations += 1
+                        
+                        # Check if an alert should be triggered
+                        if st.check_and_trigger_alert():
+                            for q in logs_qs:
+                                try:
+                                    q.put_nowait(f'ALERT: Completed {st.iterations} iterations')
+                                except Exception:
+                                    try:
+                                        q.put(f'ALERT: Completed {st.iterations} iterations')
+                                    except Exception:
+                                        pass
                     if msg.startswith('Loaded macro:'):
                         parts = msg.split(':',1)[1].strip().split(' ',1)
                         st = app_status
@@ -215,6 +247,30 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                                 q.put(f'Adapter change requested: {new_adapter}. Please restart the system.')
                             except Exception:
                                 pass
+                elif isinstance(cmd, str) and cmd.startswith('alert:'):
+                    # Handle alert interval setting
+                    try:
+                        alert_interval = int(cmd.split(':', 1)[1]) if ':' in cmd else 0
+                        app_status.alert_interval = alert_interval
+                        app_status.last_alert_iteration = app_status.iterations  # Reset alert counter
+                        msg = f'Alert interval set to {alert_interval} iterations' if alert_interval > 0 else 'Alerts disabled'
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait(msg)
+                            except Exception:
+                                try:
+                                    q.put(msg)
+                                except Exception:
+                                    pass
+                    except ValueError:
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait('Invalid alert interval - must be a number')
+                            except Exception:
+                                try:
+                                    q.put('Invalid alert interval - must be a number')
+                                except Exception:
+                                    pass
                 elif isinstance(cmd, str) and cmd.startswith('load:'):
                     parts = cmd.split(':', 2)  # Split into at most 3 parts: 'load', name, setup_name
                     name = parts[1] if len(parts) > 1 else ''
