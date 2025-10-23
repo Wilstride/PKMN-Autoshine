@@ -113,6 +113,21 @@ async def api_select_macro(request):
     return web.Response(status=200)
 
 
+async def api_run_once(request):
+    data = await request.json()
+    name = data.get('name')
+    
+    if not name:
+        return web.Response(status=400, text='name required')
+    
+    cmd_q: 'queue.Queue' = request.app['cmd_q']
+    
+    # Send run-once command
+    cmd_q.put(f'run_once:{name}')
+    
+    return web.Response(status=200)
+
+
 async def api_stop(request):
     cmd_q: 'queue.Queue' = request.app['cmd_q']
     try:

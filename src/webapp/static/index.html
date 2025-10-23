@@ -15,133 +15,65 @@
 <body>
   <div class="container">
     <header class="header">
-      <h1><i class="fas fa-gamepad"></i> PKMN Autoshine</h1>
-      <p class="subtitle">Advanced Pokémon Macro Automation Control</p>
+      <div class="header-left">
+        <h1><i class="fas fa-gamepad"></i> PKMN Autoshine</h1>
+        <p class="subtitle">Advanced Pokémon Macro Automation Control</p>
+      </div>
+      <div class="header-right">
+        <button id="settings-toggle" class="settings-btn" title="Settings">
+          <i class="fas fa-cog"></i>
+        </button>
+      </div>
     </header>
 
-    <div class="card control-panel">
+    <div class="card macro-control-panel">
       <h2><i class="fas fa-play-circle"></i> Macro Controls</h2>
       
-      <div class="controls-section">
-        <div class="button-group">
-          <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause (Finish Current)</button>
-          <button id="resume" class="success"><i class="fas fa-play"></i> Resume</button>
-          <button id="force_stop" class="danger"><i class="fas fa-stop-circle"></i> Force Stop</button>
+      <!-- Status Section -->
+      <div class="status-section">
+        <div class="status-item">
+          <span class="status-label">Iteration:</span>
+          <span class="status-value" id="iteration_count">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Runtime:</span>
+          <span class="status-value" id="runtime_display">0:00</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Time/Iteration:</span>
+          <span class="status-value" id="time_per_iteration">--</span>
         </div>
       </div>
 
+      <!-- Macro Selection -->
       <div class="controls-section">
-        <h3 style="margin-bottom: 12px;"><i class="fas fa-list"></i> Select Macros</h3>
         <div class="macro-selector">
           <div class="form-group">
-            <label for="setup_macro_select">Setup Macro (runs once):</label>
-            <select id="setup_macro_select">
-              <option value="">None (optional)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="macro_select">Main Macro (repeats):</label>
+            <label for="macro_select">Macro:</label>
             <select id="macro_select">
               <option value="">Choose a macro...</option>
             </select>
           </div>
-          <button id="run_macro" class="success"><i class="fas fa-rocket"></i> Run Selected</button>
+          <div class="macro-actions">
+            <button id="run_macro" class="success"><i class="fas fa-rocket"></i> Run</button>
+            <button id="run_once" class="primary"><i class="fas fa-play"></i> Run Once</button>
+            <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause</button>
+            <button id="force_stop" class="danger"><i class="fas fa-stop-circle"></i> Force Stop</button>
+            <button id="edit_macro" class="secondary"><i class="fas fa-edit"></i> Edit</button>
+            <button id="new_macro" class="secondary"><i class="fas fa-plus"></i> New</button>
+          </div>
         </div>
       </div>
 
     </div>
 
-    <!-- Settings Panel -->
-    <div class="card settings-panel">
-      <h2><i class="fas fa-cog"></i> Settings</h2>
-      
-      <div class="settings-section">
-        <h3><i class="fas fa-bell"></i> Alert Settings</h3>
-        <div class="alert-settings">
-          <div class="form-group">
-            <label for="alert_interval">Alert every X iterations (0 = disabled):</label>
-            <input type="number" id="alert_interval" value="0" min="0" max="10000" step="1" style="width: 100px;">
-          </div>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="enable_notifications" checked> Enable browser notifications
-            </label>
-          </div>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="enable_sound" checked> Enable sound alerts
-            </label>
-          </div>
-          <button id="set_alerts"><i class="fas fa-bell"></i> Set Alerts</button>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <h3><i class="fas fa-plug"></i> Adapter Settings</h3>
-        <div class="adapter-grid">
-          <div class="form-group">
-            <label for="adapter_select">Preferred Adapter:</label>
-            <select id="adapter_select">
-              <option value="">Auto-detect (Pico first)</option>
-              <option value="pico">Pico W (USB Serial)</option>
-              <option value="joycontrol">Joycontrol (Bluetooth)</option>
-            </select>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button id="set_adapter"><i class="fas fa-check"></i> Set</button>
-            <button id="test_adapters"><i class="fas fa-wifi"></i> Test</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card status-display compact">
-      <h2><i class="fas fa-info-circle"></i> Status</h2>
-      
-      <div class="status-grid">
-        <div class="status-item">
-          <span class="status-label">Connection:</span>
-          <span class="connection-indicator">
-            <span class="connection-dot" id="ws-indicator"></span>
-            <span id="ws-status">Connecting...</span>
-          </span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">System:</span>
-          <span class="status-value" id="status">Initializing...</span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Macro:</span>
-          <span class="status-value" id="macro_details">No macro loaded</span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Adapter:</span>
-          <span class="status-value" id="adapter_status">Checking...</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="editor-section">
-      <div class="card macro-manager">
-        <h2><i class="fas fa-code"></i> Macro Management</h2>
-        <div class="macro-editor-controls">
-          <button id="edit_macro" class="primary"><i class="fas fa-edit"></i> Edit Selected Macro</button>
-          <button id="new_macro" class="success"><i class="fas fa-file-plus"></i> Create New Macro</button>
-        </div>
-      </div>
-
-      <div class="card">
+    <!-- Live Logs -->
+    <div class="card logs-panel">
+      <div class="logs-header">
         <h2><i class="fas fa-terminal"></i> Live Logs</h2>
-        <div class="log-container">
-          <div class="log-header">
-            <span>Console Output</span>
-            <button id="clear-log" style="padding: 4px 8px; font-size: 0.8rem;">
-              <i class="fas fa-trash"></i> Clear
-            </button>
-          </div>
-          <div class="log-content" id="log">Waiting for connection...</div>
-        </div>
+        <button id="clear-log" class="btn-small"><i class="fas fa-trash"></i> Clear</button>
       </div>
+      <div class="logs-content" id="log">Waiting for connection...</div>
     </div>
   </div>
   <script>
@@ -556,9 +488,11 @@ SLEEP 0.1`;
 
     function handleWebSocketMessage(msg) {
       if (msg.type === 'log') {
-        addLogMessage(msg.msg);
+        addLogMessage(msg.message || msg.msg, msg.level || 'info');
       } else if (msg.type === 'status') {
-        updateStatus(msg.msg);
+        updateStatus(msg);
+      } else if (msg.type === 'alert') {
+        showAlert(msg.iterations);
       }
     }
 
@@ -569,15 +503,11 @@ SLEEP 0.1`;
         if (!res.ok) return;
         
         const status = await res.json();
-        const details = [
-          `📁 Macro: ${status.name || 'None'}`,
-          `⏱️ Runtime: ${status.runtime || '0:00'}`,
-          `🔄 Iterations: ${status.iterations || 0}`,
-          `⚡ Sec/Iter: ${status.sec_per_iter || 'N/A'}`,
-          `🔔 Alert: ${status.alert_interval > 0 ? `Every ${status.alert_interval}` : 'Disabled'}`
-        ].join('\n');
         
-        document.getElementById('macro_details').textContent = details;
+        // Update individual status fields
+        document.getElementById('iteration_count').textContent = status.iterations || 0;
+        document.getElementById('runtime_display').textContent = status.runtime || '0:00';
+        document.getElementById('time_per_iteration').textContent = status.sec_per_iter ? status.sec_per_iter + 's' : '--';
         
         // Check for pending alert
         if (status.pending_alert && status.iterations > 0) {
@@ -625,30 +555,82 @@ SLEEP 0.1`;
       }
     }
 
-    function updateStatus(statusMsg) {
-      const statusElement = document.getElementById('status');
-      const statusCard = document.getElementById('status-card');
+    function updateStatus(data) {
+      // Handle both old string format and new structured data
+      if (typeof data === 'string') {
+        document.getElementById('macro_status').textContent = data;
+        return;
+      }
       
-      statusElement.textContent = `⚡ ${statusMsg}`;
+      // Update iteration counter, runtime and time per iteration in main display
+      if (data.iterations !== undefined) {
+        document.getElementById('iteration_count').textContent = data.iterations;
+      }
+      if (data.runtime) {
+        document.getElementById('runtime_display').textContent = data.runtime;
+      }
+      if (data.sec_per_iter !== undefined) {
+        document.getElementById('time_per_iteration').textContent = data.sec_per_iter ? data.sec_per_iter + 's' : '--';
+      }
       
-      // Update status card styling based on status
-      statusCard.classList.remove('success', 'warning', 'error');
-      if (statusMsg.includes('running') || statusMsg.includes('connected')) {
-        statusCard.classList.add('success');
-      } else if (statusMsg.includes('paused') || statusMsg.includes('warning')) {
-        statusCard.classList.add('warning');
-      } else if (statusMsg.includes('error') || statusMsg.includes('failed')) {
-        statusCard.classList.add('error');
+      // Update console status with MAC address if available (in settings)
+      if (data.console_mac) {
+        document.getElementById('console_status').textContent = `${data.console_type || 'Switch'} (${data.console_mac})`;
+      } else if (data.adapter_name) {
+        document.getElementById('console_status').textContent = data.adapter_name + ' - No console connected';
+      } else {
+        document.getElementById('console_status').textContent = 'No adapter connected';
+      }
+      
+      // Update macro status (in settings)
+      if (data.status) {
+        document.getElementById('macro_status').textContent = data.status;
+      }
+      
+      // Update adapter status in settings
+      if (data.adapter_name) {
+        document.getElementById('adapter_status').textContent = data.adapter_name;
       }
     }
 
-    // Log management with 20 entry limit
+    // Log management with 20 entry limit and spam filtering
     let logEntries = [];
+    let lastLogMessage = '';
+    let logRepeatCount = 0;
     const MAX_LOG_ENTRIES = 20;
+    const SPAM_MESSAGES = [
+      'Could not find Pico W device',
+      'No module named \'joycontrol\'',
+      'Could not connect to any adapter',
+      'Attempting to reconnect',
+      'WebSocket disconnected'
+    ];
+    
+    function isSpamMessage(message) {
+      return SPAM_MESSAGES.some(spam => message.includes(spam));
+    }
     
     function addLogMessage(message, type = 'info') {
+      // Filter out spam messages after first occurrence
+      if (isSpamMessage(message)) {
+        if (message === lastLogMessage) {
+          logRepeatCount++;
+          // Only show repeated spam messages every 10th occurrence
+          if (logRepeatCount % 10 !== 0) {
+            return;
+          }
+          message = `${message} (repeated ${logRepeatCount} times)`;
+        } else {
+          logRepeatCount = 1;
+        }
+      } else {
+        logRepeatCount = 0;
+      }
+      
+      lastLogMessage = message;
+      
       const timestamp = new Date().toLocaleTimeString();
-      const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'info' ? 'ℹ️' : '📝';
+      const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'info' ? 'ℹ️' : type === 'warning' ? '⚠️' : '📝';
       const logEntry = `[${timestamp}] ${prefix} ${message}`;
       
       logEntries.push(logEntry);
@@ -678,26 +660,15 @@ SLEEP 0.1`;
         
         const names = await res.json();
         
-        // Populate main macro dropdown
+        // Populate macro dropdown
         const select = document.getElementById('macro_select');
         select.innerHTML = '<option value="">Choose a macro...</option>';
         
-        // Populate setup macro dropdown
-        const setupSelect = document.getElementById('setup_macro_select');
-        setupSelect.innerHTML = '<option value="">None (optional)</option>';
-        
         names.forEach(name => {
-          // Add to main macro dropdown
           const option = document.createElement('option');
           option.value = name;
           option.textContent = name;
           select.appendChild(option);
-          
-          // Add to setup macro dropdown
-          const setupOption = document.createElement('option');
-          setupOption.value = name;
-          setupOption.textContent = name;
-          setupSelect.appendChild(setupOption);
         });
       } catch (error) {
         console.error('Failed to list macros:', error);
@@ -774,34 +745,48 @@ SLEEP 0.1`;
 
     async function runMacro() {
       const selectedMacro = document.getElementById('macro_select').value;
-      const setupMacro = document.getElementById('setup_macro_select').value;
       
       if (!selectedMacro) {
-        addLogMessage('Please select a main macro to run', 'error');
+        addLogMessage('Please select a macro to run', 'error');
         return;
       }
       
       try {
-        const payload = { name: selectedMacro };
-        if (setupMacro) {
-          payload.setup_name = setupMacro;
-        }
-        
         const res = await fetch('/api/select', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ name: selectedMacro })
         });
         
         if (!res.ok) throw new Error(`Failed to run macro: ${res.status}`);
         
-        if (setupMacro) {
-          addLogMessage(`Started macro with setup: ${setupMacro} → ${selectedMacro}`, 'success');
-        } else {
-          addLogMessage(`Started macro: ${selectedMacro}`, 'success');
-        }
+        addLogMessage(`Started macro: ${selectedMacro}`, 'success');
       } catch (error) {
         console.error('Failed to run macro:', error);
+      }
+    }
+
+    async function runOnce() {
+      const selectedMacro = document.getElementById('macro_select').value;
+      
+      if (!selectedMacro) {
+        addLogMessage('Please select a macro to run once', 'error');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/run-once', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: selectedMacro })
+        });
+        
+        if (!res.ok) throw new Error(`Failed to run macro once: ${res.status}`);
+        
+        addLogMessage(`Running macro once: ${selectedMacro}`, 'success');
+      } catch (error) {
+        console.error('Failed to run macro once:', error);
+        addLogMessage(`Failed to run macro once: ${selectedMacro}`, 'error');
         addLogMessage(`Failed to run macro: ${error.message}`, 'error');
       }
     }
@@ -819,6 +804,15 @@ SLEEP 0.1`;
     
     function hideModal() {
       document.getElementById('macro-modal').style.display = 'none';
+    }
+    
+    // Settings modal functions
+    function showSettings() {
+      document.getElementById('settings-modal').style.display = 'flex';
+    }
+    
+    function hideSettings() {
+      document.getElementById('settings-modal').style.display = 'none';
     }
     
     async function editMacro() {
@@ -982,11 +976,11 @@ SLEEP 0.1`;
     function setupEventListeners() {
       // Control buttons
       document.getElementById('pause').onclick = () => sendCommand('pause');
-      document.getElementById('resume').onclick = () => sendCommand('resume');
       document.getElementById('force_stop').onclick = () => sendCommand('force_stop');
 
       // Macro controls
       document.getElementById('run_macro').onclick = runMacro;
+      document.getElementById('run_once').onclick = runOnce;
       document.getElementById('macro_select').onchange = (e) => loadMacro(e.target.value);
       document.getElementById('edit_macro').onclick = editMacro;
       document.getElementById('new_macro').onclick = newMacro;
@@ -997,6 +991,14 @@ SLEEP 0.1`;
       document.getElementById('cancel_edit').onclick = hideModal;
       document.getElementById('macro-modal').onclick = (e) => {
         if (e.target.id === 'macro-modal') hideModal();
+      };
+      
+      // Settings modal controls
+      document.getElementById('settings-toggle').onclick = showSettings;
+      document.getElementById('settings-close').onclick = hideSettings;
+      document.getElementById('settings_save').onclick = hideSettings;
+      document.getElementById('settings-modal').onclick = (e) => {
+        if (e.target.id === 'settings-modal') hideSettings();
       };
 
       // Adapter controls
@@ -1085,6 +1087,69 @@ SLEEP 0.1`;
       <div class="modal-footer">
         <button id="save_macro" class="success"><i class="fas fa-save"></i> Save</button>
         <button id="cancel_edit" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-cog"></i> Settings</h2>
+        <button class="modal-close" id="settings-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h3><i class="fas fa-bell"></i> Alert Settings</h3>
+          <div class="form-group">
+            <label for="alert_interval">Alert every X iterations (0 = disabled):</label>
+            <input type="number" id="alert_interval" value="0" min="0" max="10000" step="1" style="width: 100px;">
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="enable_notifications" checked> Enable browser notifications
+            </label>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="enable_sound" checked> Enable sound alerts
+            </label>
+          </div>
+          <button id="set_alerts"><i class="fas fa-bell"></i> Set Alerts</button>
+        </div>
+
+        <div class="settings-section">
+          <h3><i class="fas fa-plug"></i> Adapter Settings</h3>
+          <div class="form-group">
+            <label for="adapter_select">Preferred Adapter:</label>
+            <select id="adapter_select">
+              <option value="">Auto-detect (Pico first)</option>
+              <option value="pico">Pico W (USB Serial)</option>
+              <option value="joycontrol">Joycontrol (Bluetooth)</option>
+            </select>
+          </div>
+          <div class="adapter-status">
+            <div class="status-item">
+              <span class="status-label">Adapter:</span>
+              <span class="status-value" id="adapter_status">Checking...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Console:</span>
+              <span class="status-value" id="console_status">Checking connection...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Status:</span>
+              <span class="status-value" id="macro_status">Ready</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 12px;">
+            <button id="set_adapter"><i class="fas fa-check"></i> Set</button>
+            <button id="test_adapters"><i class="fas fa-wifi"></i> Test</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="settings_save" class="success"><i class="fas fa-check"></i> Close</button>
       </div>
     </div>
   </div>

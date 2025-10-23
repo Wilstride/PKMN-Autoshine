@@ -284,3 +284,48 @@ class MacroRunner:
             await self.adapter.center_sticks()
         except Exception:
             pass
+
+    async def run_once(self):
+        """Run the macro commands exactly once without looping."""
+        if self._commands is None:
+            raise RuntimeError('No commands set')
+        if isinstance(self._commands, list) and len(self._commands) == 0:
+            if self.log_queue is not None:
+                try:
+                    self.log_queue.put_nowait('MacroRunner: no commands to run')
+                except Exception:
+                    pass
+            return
+
+        try:
+            if self.log_queue is not None:
+                try:
+                    self.log_queue.put_nowait('=== running macro once ===')
+                except Exception:
+                    pass
+            
+            await run_commands(self.adapter, self._commands, log_queue=self.log_queue)
+            
+            if self.log_queue is not None:
+                try:
+                    self.log_queue.put_nowait('=== macro run completed ===')
+                except Exception:
+                    pass
+        except Exception as e:
+            if self.log_queue is not None:
+                try:
+                    self.log_queue.put_nowait(f'Error during single macro run: {e}')
+                except Exception:
+                    pass
+            else:
+                print(f'Error during single macro run: {e}')
+        finally:
+            # Clean up adapter state
+            try:
+                await self.adapter.release_all_buttons()
+            except Exception:
+                pass
+            try:
+                await self.adapter.center_sticks()
+            except Exception:
+                pass

@@ -121,12 +121,13 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
 
         broadcast_log(logs_qs, 'worker: creating and connecting adapter (prioritizing Pico)')
         
+        # Initialize app_status before using it
+        app_status = status if status is not None else MacroStatus()
+        
         adapter = await create_adapter(preferred_adapter)  # Factory handles connection automatically
         adapter_name = adapter.__class__.__name__ if adapter else "No adapter"
         broadcast_log(logs_qs, 'worker: adapter connected', 'success')
         broadcast_status(logs_qs, app_status, adapter_name)
-
-        app_status = status if status is not None else MacroStatus()
 
         runner = MacroRunner(adapter)
         runner.set_commands(commands)
@@ -263,6 +264,58 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                             except Exception:
                                 try:
                                     q.put('Invalid alert interval - must be a number')
+                                except Exception:
+                                    pass
+                elif isinstance(cmd, str) and cmd.startswith('run_once:'):
+                    # Handle run-once command - run a macro just once without looping
+                    parts = cmd.split(':', 1)
+                    name = parts[1] if len(parts) > 1 else ''
+                    
+                    try:
+                        from pathlib import Path
+                        base_path = Path(pathlib.Path(__file__).parent.parent.parent) / 'data' / 'macros'
+                        
+                        mpath = base_path / Path(name).name
+                        text = mpath.read_text()
+                        new_commands = parse_macro(text)
+                        
+                        # Set single-run mode and run once
+                        runner.set_commands(new_commands)
+                        runner.set_setup_commands(None)  # No setup for single runs
+                        
+                        # Execute the commands once without repeating
+                        await runner.stop()
+                        try:
+                            app_status.name = name
+                            app_status.start_time = time.time()
+                            app_status.iterations = 0
+                            app_status.last_iter_time = None
+                            app_status.sec_per_iter = None
+                            app_status.paused = False
+                            app_status.pause_start = None
+                            app_status.paused_total = 0.0
+                        except Exception:
+                            pass
+                        
+                        # Run once and stop
+                        await runner.run_once()
+                        
+                        msg = f'Executed macro once: {name} ({len(new_commands)} commands)'
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait(msg)
+                            except Exception:
+                                try:
+                                    q.put(msg)
+                                except Exception:
+                                    pass
+                    except Exception as e:
+                        for q in logs_qs:
+                            try:
+                                q.put_nowait(f'Error running macro once {name}: {e}')
+                            except Exception:
+                                try:
+                                    q.put(f'Error running macro once {name}: {e}')
                                 except Exception:
                                     pass
                 elif isinstance(cmd, str) and cmd.startswith('load:'):
