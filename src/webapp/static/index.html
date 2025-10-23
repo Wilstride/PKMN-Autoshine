@@ -26,10 +26,9 @@
       </div>
     </header>
 
-    <div class="card macro-control-panel">
-      <h2><i class="fas fa-play-circle"></i> Macro Controls</h2>
-      
-      <!-- Status Section -->
+    <!-- Macro Status Section -->
+    <div class="card macro-status-panel">
+      <h2><i class="fas fa-chart-line"></i> Macro Status</h2>
       <div class="status-section">
         <div class="status-item">
           <span class="status-label">Iteration:</span>
@@ -44,24 +43,28 @@
           <span class="status-value" id="time_per_iteration">--</span>
         </div>
       </div>
+    </div>
 
+    <!-- Macro Controls Section -->
+    <div class="card macro-control-panel">
+      <h2><i class="fas fa-play-circle"></i> Macro Controls</h2>
+      
       <!-- Macro Selection -->
       <div class="controls-section">
         <div class="macro-selector">
           <div class="form-group">
-            <label for="macro_select">Macro:</label>
             <select id="macro_select">
               <option value="">Choose a macro...</option>
             </select>
           </div>
-          <div class="macro-actions">
-            <button id="run_macro" class="success"><i class="fas fa-rocket"></i> Run</button>
-            <button id="run_once" class="primary"><i class="fas fa-play"></i> Run Once</button>
-            <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause</button>
-            <button id="force_stop" class="danger"><i class="fas fa-stop-circle"></i> Force Stop</button>
-            <button id="edit_macro" class="secondary"><i class="fas fa-edit"></i> Edit</button>
-            <button id="new_macro" class="secondary"><i class="fas fa-plus"></i> New</button>
-          </div>
+        </div>
+        <div class="macro-actions">
+          <button id="run_macro" class="success"><i class="fas fa-rocket"></i> Run</button>
+          <button id="run_once" class="primary"><i class="fas fa-play"></i> Run Once</button>
+          <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause</button>
+          <button id="force_stop" class="danger"><i class="fas fa-stop-circle"></i> Force Stop</button>
+          <button id="edit_macro" class="secondary"><i class="fas fa-edit"></i> Edit</button>
+          <button id="new_macro" class="secondary"><i class="fas fa-plus"></i> New</button>
         </div>
       </div>
 
@@ -1067,7 +1070,7 @@ SLEEP 0.1`;
       ]);
       
       // Set up periodic updates
-      setInterval(updateMacroDetails, 2000);
+      setInterval(updateMacroDetails, 1000);
       setInterval(updateAdapterStatus, 30000);
       
       addLogMessage('Application initialized successfully!', 'success');
