@@ -860,6 +860,27 @@ SLEEP 0.1`;
       }
     }
 
+    async function resetMetrics() {
+      try {
+        const res = await fetch('/api/reset-metrics', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' }
+        });
+        
+        if (!res.ok) throw new Error(`Failed to reset metrics: ${res.status}`);
+        
+        // Immediately update the UI
+        document.getElementById('iteration_count').textContent = '0';
+        document.getElementById('runtime_display').textContent = '0:00';
+        document.getElementById('time_per_iteration').textContent = '--';
+        
+        addLogMessage('Metrics reset successfully', 'success');
+      } catch (error) {
+        console.error('Failed to reset metrics:', error);
+        addLogMessage(`Failed to reset metrics: ${error.message}`, 'error');
+      }
+    }
+
     // Alert functions
     async function setAlerts() {
       const interval = parseInt(document.getElementById('alert_interval').value) || 0;
@@ -994,8 +1015,14 @@ SLEEP 0.1`;
     // Event listeners
     function setupEventListeners() {
       // Control buttons
-      document.getElementById('pause').onclick = () => sendCommand('pause');
-      document.getElementById('force_stop').onclick = () => sendCommand('force_stop');
+      document.getElementById('pause').onclick = () => {
+        sendCommand('pause');
+        // The server should handle stopping the runtime tracking
+      };
+      document.getElementById('force_stop').onclick = () => {
+        sendCommand('force_stop');
+        // The server should handle stopping the runtime tracking
+      };
 
       // Macro controls
       document.getElementById('run_macro').onclick = runMacro;
@@ -1022,6 +1049,9 @@ SLEEP 0.1`;
       // Adapter controls
       document.getElementById('set_adapter').onclick = setAdapter;
       document.getElementById('test_adapters').onclick = testAdapters;
+
+      // Metrics controls
+      document.getElementById('reset_metrics').onclick = resetMetrics;
 
       // Alert controls
       document.getElementById('set_alerts').onclick = setAlerts;
@@ -1152,6 +1182,15 @@ SLEEP 0.1`;
             </label>
           </div>
           <button id="set_alerts"><i class="fas fa-save"></i> Apply</button>
+        </div>
+
+        <!-- Metrics Configuration -->
+        <div class="settings-section">
+          <h3><i class="fas fa-chart-bar"></i> Metrics</h3>
+          <div class="form-group">
+            <p>Reset iteration count and runtime back to zero:</p>
+            <button id="reset_metrics" class="danger"><i class="fas fa-undo"></i> Reset Metrics</button>
+          </div>
         </div>
 
         <!-- Adapter Configuration -->

@@ -263,3 +263,13 @@ async def api_command(request):
         
     except Exception as e:
         return web.Response(status=500, text=str(e))
+
+
+async def api_reset_metrics(request):
+    """Reset macro status metrics (iterations, runtime, etc.)."""
+    try:
+        cmd_q: 'queue.Queue' = request.app['cmd_q']
+        cmd_q.put('reset_metrics')
+        return web.json_response({'status': 'ok', 'message': 'Metrics reset'})
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
