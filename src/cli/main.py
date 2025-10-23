@@ -82,20 +82,22 @@ async def main():
         try:
             while runner.is_running():
                 try:
-                    # Get log messages with a timeout
-                    msg = await asyncio.wait_for(asyncio.to_thread(logs.get), timeout=1.0)
-                    print(f"[LOG] {msg}")
-                    
-                    # Track iterations
-                    if "iteration" in msg and "start" in msg:
-                        count += 1
-                        elapsed = time.time() - start
-                        avg_time = elapsed / count if count > 0 else 0
-                        print(f"✓ Starting cycle {count} after {elapsed:.2f}s (avg: {avg_time:.2f}s per cycle)")
+                    # Get log messages with a timeout (logs.get_nowait is sync, logs.get is async)
+                    try:
+                        msg = logs.get_nowait()
+                        print(f"[LOG] {msg}")
                         
-                except asyncio.TimeoutError:
-                    # No logs available, continue
-                    continue
+                        # Track iterations
+                        if isinstance(msg, str) and "iteration" in msg and "start" in msg:
+                            count += 1
+                            elapsed = time.time() - start
+                            avg_time = elapsed / count if count > 0 else 0
+                            print(f"✓ Starting cycle {count} after {elapsed:.2f}s (avg: {avg_time:.2f}s per cycle)")
+                    except:
+                        # No logs available right now, wait a bit
+                        await asyncio.sleep(0.1)
+                        continue
+                        
                 except Exception as e:
                     print(f"Error reading logs: {e}")
                     break

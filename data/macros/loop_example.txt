@@ -1,0 +1,13 @@
+# Press A button
+PRESS a
+SLEEP 2
+
+# Repeat the following actions 5 times
+LOOP 5
+    # Move forward
+    STICK l 0.0 1.0
+    SLEEP 1.3
+    # Stop
+    STICK l 0.0 0.0
+    SLEEP 1.3
+ENDLOOP

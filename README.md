@@ -21,7 +21,8 @@ The Pico W acts as a bridge, converting USB serial commands into authentic Ninte
 
 - **USB Serial Interface**: Send commands from any host system via standard serial communication
 - **Bluetooth Controller Emulation**: Full Nintendo Switch Pro Controller compatibility via Bluetooth
-- **Command Language**: Simple text-based command format for buttons, sticks, and timing
+- **Command Language**: Simple text-based command format for buttons, sticks, timing, and loops
+- **Loop Support**: Repeat command sequences with `LOOP <count>` / `ENDLOOP` syntax
 - **Setup Macro Support**: Configure one-time initialization macros that run before your main automation loop
 - **Real-time Processing**: Low-latency command execution for responsive automation
 - **Cross-platform Host**: Works with any system that supports USB serial (Linux, Windows, macOS)
@@ -374,6 +375,70 @@ sudo pip install aioconsole hid crc8
 # Run automation scripts
 python cli.py  # Auto-selects best adapter
 ```
+
+## Macro Language
+
+PKMN-Autoshine uses a simple text-based macro language for defining automation sequences. Macros support basic commands and control structures like loops.
+
+### Basic Commands
+
+```
+# Comments start with # and are ignored
+PRESS <button>      # Press and release a button (a, b, x, y, home, plus, etc.)
+STICK <stick> <h> <v>  # Move analog stick (l/r stick, horizontal, vertical)
+SLEEP <seconds>     # Wait for specified number of seconds
+```
+
+### Loop Structure
+
+Use loops to repeat sequences of commands:
+
+```
+LOOP <count>
+    # Commands to repeat
+    PRESS a
+    SLEEP 1
+ENDLOOP
+```
+
+### Example Macro
+
+```
+# Press A button
+PRESS a
+SLEEP 2
+
+# Repeat the following actions 5 times
+LOOP 5
+    # Move forward
+    STICK l 0.0 1.0
+    SLEEP 1.3
+    # Stop
+    STICK l 0.0 0.0
+    SLEEP 1.3
+ENDLOOP
+
+# Final action
+PRESS b
+```
+
+### Features
+
+- **Case insensitive**: Commands can be written in any case
+- **Comments**: Lines starting with `#` are ignored
+- **Error validation**: Parser catches syntax errors and missing ENDLOOP statements
+- **Nested loops**: Loops can be nested inside other loops (though not commonly needed)
+- **Backward compatibility**: All existing macros continue to work unchanged
+
+### Button Names
+
+Common button names include: `a`, `b`, `x`, `y`, `l`, `r`, `zl`, `zr`, `plus`, `minus`, `home`, `capture`, `lclick`, `rclick`
+
+### Stick Controls
+
+- Stick names: `l` (left stick), `r` (right stick)  
+- Coordinates: `-1.0` to `1.0` for both horizontal and vertical axes
+- Center position: `0.0 0.0`
 
 ## Acknowledgments
 
