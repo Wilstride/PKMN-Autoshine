@@ -9,11 +9,12 @@ import asyncio
 import pathlib
 import traceback
 import time
+import queue
 from typing import Optional
 
 from macros.parser import parse_macro
 from macros.runner import MacroRunner
-from adapter.joycontrol import JoycontrolAdapter
+from adapter.factory import create_adapter
 
 
 class MacroStatus:
@@ -44,7 +45,7 @@ class MacroStatus:
         }
 
 
-async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: list, status: Optional[MacroStatus]=None):
+async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: list, status: Optional[MacroStatus]=None, preferred_adapter: Optional[str]=None):
     try:
         for q in logs_qs:
             try:
@@ -91,22 +92,13 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
 
         for q in logs_qs:
             try:
-                q.put_nowait('worker: creating adapter')
+                q.put_nowait('worker: creating and connecting adapter (prioritizing Pico)')
             except Exception:
                 try:
-                    q.put('worker: creating adapter')
+                    q.put('worker: creating and connecting adapter (prioritizing Pico)')
                 except Exception:
                     pass
-        adapter = JoycontrolAdapter()
-        for q in logs_qs:
-            try:
-                q.put_nowait('worker: connecting adapter')
-            except Exception:
-                try:
-                    q.put('worker: connecting adapter')
-                except Exception:
-                    pass
-        await adapter.connect()
+        adapter = await create_adapter(preferred_adapter)  # Factory handles connection automatically
         for q in logs_qs:
             try:
                 q.put_nowait('worker: adapter connected')
@@ -211,6 +203,18 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                 elif cmd == 'stop':
                     await runner.stop()
                     break
+                elif isinstance(cmd, str) and cmd.startswith('adapter:'):
+                    # Handle adapter switching - this would require restarting the entire worker
+                    # For now, just log it - full implementation would require more complex worker management
+                    new_adapter = cmd.split(':', 1)[1] if ':' in cmd else None
+                    for q in logs_qs:
+                        try:
+                            q.put_nowait(f'Adapter change requested: {new_adapter}. Please restart the system.')
+                        except Exception:
+                            try:
+                                q.put(f'Adapter change requested: {new_adapter}. Please restart the system.')
+                            except Exception:
+                                pass
                 elif isinstance(cmd, str) and cmd.startswith('load:'):
                     name = cmd.split(':',1)[1]
                     try:

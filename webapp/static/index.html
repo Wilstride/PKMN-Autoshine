@@ -13,12 +13,24 @@
   <button id="stop">Stop</button>
   <div id="status">Status: idle</div>
   <pre id="macro_details" style="background:#222;color:#0f0;padding:0.5rem;margin-top:0.5rem;font-family:monospace"></pre>
+  <div id="adapter_status" style="background:#224;color:#fff;padding:0.5rem;margin-top:0.5rem;font-family:monospace"></div>
   <div id="log"></div>
   <hr>
   <div>
     <label for="macro_select">Select macro:</label>
     <select id="macro_select"></select>
     <button id="run_macro">Run</button>
+  </div>
+  <div>
+    <h3>Adapter Settings</h3>
+    <label for="adapter_select">Preferred adapter:</label>
+    <select id="adapter_select">
+      <option value="">Auto-detect (Pico first)</option>
+      <option value="pico">Pico W (USB Serial)</option>
+      <option value="joycontrol">Joycontrol (Bluetooth)</option>
+    </select>
+    <button id="set_adapter">Set Adapter</button>
+    <button id="test_adapters">Test Connectivity</button>
   </div>
   <div>
     <h3>Create / Edit Macro</h3>
@@ -36,7 +48,26 @@ async function updateMacroDetails(){
         document.getElementById('macro_details').textContent = `Macro: ${s.name || '-'}\nRuntime: ${s.runtime || '-'}\nIterations: ${s.iterations||0}\nSec/Iter: ${s.sec_per_iter||'-'}`;
     }catch(e){console.error(e)}
 }
+
+async function updateAdapterStatus(){
+    try{
+        let res = await fetch('/api/adapters/status');
+        if(!res.ok) return;
+        let s = await res.json();
+        let preferred = s.preferred || 'auto-detect';
+        let connectivity = s.connectivity || {};
+        let statusText = `Adapter: ${preferred}\n`;
+        statusText += `Pico: ${connectivity.pico ? '✓ Available' : '✗ Unavailable'}\n`;
+        statusText += `Joycontrol: ${connectivity.joycontrol ? '✓ Available' : '✗ Unavailable'}`;
+        document.getElementById('adapter_status').textContent = statusText;
+        
+        // Update the select dropdown
+        document.getElementById('adapter_select').value = s.preferred || '';
+    }catch(e){console.error(e)}
+}
+
 setInterval(updateMacroDetails, 2000);
+setInterval(updateAdapterStatus, 5000);
 let ws = new WebSocket('ws://'+location.host+'/ws');
 ws.onopen = ()=>console.log('ws open');
 ws.onmessage = (e)=>{
@@ -96,7 +127,29 @@ document.getElementById('macro_select').onchange = async ()=>{
     }
 }
 
+document.getElementById('set_adapter').onclick = async ()=>{
+    let adapter = document.getElementById('adapter_select').value || null;
+    let res = await fetch('/api/adapters/select', {
+        method:'POST', 
+        headers:{'content-type':'application/json'}, 
+        body: JSON.stringify({adapter:adapter})
+    });
+    if(res.ok){
+        let result = await res.json();
+        alert(result.message);
+        updateAdapterStatus();
+    } else {
+        alert('Failed to set adapter preference');
+    }
+}
+
+document.getElementById('test_adapters').onclick = async ()=>{
+    document.getElementById('adapter_status').textContent = 'Testing adapters...';
+    await updateAdapterStatus();
+}
+
 listMacros().catch(e=>console.error(e));
+updateAdapterStatus().catch(e=>console.error(e));
 </script>
 </body>
 </html>
