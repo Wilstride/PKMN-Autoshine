@@ -35,7 +35,7 @@ body {
   padding: 20px;
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto auto;
   gap: 20px;
   min-height: 100vh;
 }
@@ -87,7 +87,7 @@ body {
 .card {
   background: var(--bg-card);
   border-radius: 12px;
-  padding: 24px;
+  padding: 16px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border-color);
 }
@@ -104,7 +104,7 @@ body {
 .macro-control-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .macro-control-panel .status-section {
@@ -363,6 +363,7 @@ select:focus, input[type="text"]:focus {
 
 .logs-panel {
   grid-column: 1 / -1;
+  padding: 0;
 }
 
 .logs-header {
@@ -407,7 +408,8 @@ select:focus, input[type="text"]:focus {
   font-size: 13px;
   line-height: 1.5;
   padding: 16px;
-  height: 300px;
+  min-height: 60px;
+  max-height: 300px;
   overflow-y: auto;
   white-space: pre-wrap;
   border-radius: 0 0 12px 12px;
