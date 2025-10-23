@@ -56,7 +56,7 @@ PKMN-Autoshine automatically detects and uses the best available adapter:
 
 ```bash
 # Check adapter status first (recommended)
-python check_status.py
+python src/check_status.py
 
 # Run automation (automatically detects and uses Pico W)
 python cli.py
@@ -72,15 +72,112 @@ If no Pico W is detected, the system automatically falls back to joycontrol:
 
 ### Manual Adapter Selection
 
-Use the flexible CLI for explicit adapter control:
+You can force specific adapters if needed:
 
 ```bash
 # Force Pico W adapter
-python cli_flexible.py --adapter pico --macro data/macros/plza_travel_cafe.txt
+python cli.py --adapter pico data/macros/plza_travel_cafe.txt
 
 # Force joycontrol adapter  
-python cli_flexible.py --adapter joycontrol --macro data/macros/plza_travel_cafe.txt --loop
+python cli.py --adapter joycontrol data/macros/plza_travel_cafe.txt
 ```
+
+## Adapter Integration Details
+
+### Automatic Adapter Selection
+
+The system uses the following priority order:
+1. **Pico W**: If a compatible device is detected and responsive
+2. **Joycontrol**: If Bluetooth and sudo access are available
+3. **Error**: If no adapters are available
+
+The adapter factory provides seamless fallback functionality, automatically detecting the best available option.
+
+### Web Interface Integration
+
+The web interface supports full adapter management:
+
+```bash
+# Start web server with automatic adapter selection
+python web.py
+
+# Start with specific adapter preference  
+python web.py --adapter pico
+python web.py --adapter joycontrol
+
+# Access web interface at http://localhost:8080
+```
+
+#### Web UI Features
+- **Adapter Status Display**: Shows current adapter preference and connectivity
+- **Adapter Selection**: Dropdown to choose preferred adapter:
+  - "Auto-detect (Pico first)" - Default behavior
+  - "Pico W (USB Serial)" - Force Pico adapter
+  - "Joycontrol (Bluetooth)" - Force joycontrol adapter
+- **Test Connectivity**: Button to test which adapters are available
+- **Real-time Updates**: Status updates every 5 seconds
+
+#### API Endpoints
+
+**GET /api/adapters**
+Returns list of available adapter types.
+Response: `["pico", "joycontrol"]`
+
+**GET /api/adapters/status**
+Returns current adapter preference and connectivity status.
+Response:
+```json
+{
+  "preferred": null,
+  "connectivity": {
+    "pico": false,
+    "joycontrol": true
+  }
+}
+```
+
+**POST /api/adapters/select**
+Sets the preferred adapter type.
+Request: `{"adapter": "pico"}`
+Response: `{"preferred": "pico", "message": "Adapter preference updated..."}`
+
+### Status Checking and Diagnostics
+
+Use the diagnostic tool to check your system:
+
+```bash
+python src/check_status.py
+```
+
+This comprehensive tool shows:
+- Available adapters and their dependencies
+- Hardware detection results
+- Bluetooth capability assessment
+- Connectivity test results
+- Specific recommendations for setup
+
+### Troubleshooting by Adapter Type
+
+#### Pico W Issues
+- Ensure Pico W is flashed with retro-pico-switch firmware
+- Check USB connection and permissions
+- Verify device appears in system USB devices (`lsusb`)
+- Try different USB ports/cables
+- **Permission fix**: `sudo usermod -a -G dialout $USER` (then logout/login)
+- Install dependencies: `pip install pyserial`
+
+#### Joycontrol Issues
+- Install BlueZ: `sudo apt install bluez python3-dbus libhidapi-hidraw0 libbluetooth-dev`
+- Check Bluetooth adapter: `hciconfig`
+- Ensure sudo access for the user
+- Pair and trust the Switch before use
+- Switch must be in pairing mode (Change Grip/Order)
+
+#### General Issues
+- Run `python src/check_status.py` for detailed diagnostics
+- Check Python dependencies: `pip install aiohttp pyserial`
+- Verify all adapter modules are importable
+- Use verbose logging for debugging: add logging configuration
 
 ### 4. Send Commands
 
@@ -135,25 +232,69 @@ ser.close()
 
 ```
 PKMN-Autoshine/
-├── README.md                 # This file  
-├── cli.py                    # Main CLI (auto-detects adapter)
-├── cli_flexible.py           # CLI with manual adapter selection
-├── check_status.py           # Adapter status diagnostics
-├── firmware/                 # Pico W firmware source
-│   ├── src/                  # C++ source files
-│   ├── include/              # Header files  
-│   ├── build/                # Build artifacts
-│   └── README.md             # Firmware documentation
-├── adapter/                  # Python adapter classes
-│   ├── base.py               # Abstract adapter interface
-│   ├── pico.py               # Pico W USB serial adapter
-│   ├── joycontrol.py         # Joycontrol Bluetooth adapter
-│   └── factory.py            # Adapter selection and fallback
-├── cli/                      # Command-line interface implementation
-├── data/macros/              # Macro script files
-├── macros/                   # Python macro system
-└── webapp/                   # Web interface (optional)
+├── README.md                 # This file - comprehensive documentation
+├── LICENSE                   # GPL-3.0 license file
+├── requirements.txt          # Python dependencies
+├── cli.py                    # Main CLI launcher (auto-detects adapter)
+├── web.py                    # Web interface launcher
+├── src/                      # Python source code directory
+│   ├── check_status.py       # Adapter status diagnostics
+│   ├── macro_parser.py       # Legacy compatibility wrapper
+│   ├── adapter/              # Python adapter classes
+│   │   ├── base.py           # Abstract adapter interface
+│   │   ├── pico.py           # Pico W USB serial adapter
+│   │   ├── joycontrol.py     # Joycontrol Bluetooth adapter
+│   │   └── factory.py        # Adapter selection and fallback
+│   ├── cli/                  # Command-line interface implementation
+│   ├── macros/               # Python macro parsing and execution
+│   └── webapp/               # Web interface implementation
+├── data/                     # Application data
+│   └── macros/               # Macro script files
+└── PicoSwitchController/     # Pico W firmware source (submodule)
+    ├── src/                  # C++ source files
+    ├── include/              # Header files  
+    ├── build/                # Build artifacts
+    └── README.md             # Firmware documentation
 ```
+
+## Architecture Details
+
+### Key Components
+- `adapter/factory.py`: Central adapter selection and creation logic
+- `adapter/pico.py`: Pico W adapter implementation with USB serial communication
+- `adapter/joycontrol.py`: Joycontrol adapter wrapper for Bluetooth HID
+- `src/check_status.py`: Comprehensive system diagnostics tool
+- `cli/main.py`: Updated CLI with automatic adapter selection
+- `webapp/`: Web interface with real-time adapter status display
+
+### Adapter Selection Flow
+1. System detects available adapters and their dependencies
+2. Tests connectivity for each adapter in priority order
+3. Selects best available adapter automatically (Pico W preferred)
+4. Falls back gracefully if primary adapter fails
+5. Provides detailed user feedback and status information
+6. Maintains connection state and handles reconnection
+
+### Configuration Options
+
+#### Web Server Settings
+- Default host: `0.0.0.0` (all interfaces)
+- Default port: `8080`
+- Adapter preference: `auto` (can be `pico`, `joycontrol`, or `auto`)
+
+#### CLI Settings
+- Adapter preference: `auto` (can be overridden with --adapter flag)
+- Macro file: Required argument for automation scripts
+- Verbose output available through status checking tools
+
+## Migration from Previous Versions
+
+If you were using the old hardcoded joycontrol system:
+1. Your existing setup will continue to work as a fallback option
+2. Add Pico W hardware for improved performance and reliability
+3. Use `python src/check_status.py` to verify new functionality works correctly
+4. Update any custom scripts to use the new CLI interface and adapter system
+5. The system is fully backward compatible while providing enhanced functionality
 
 ## Adapter Status and Troubleshooting
 
