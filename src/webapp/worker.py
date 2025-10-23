@@ -66,16 +66,45 @@ class MacroStatus:
         return False
 
 
+def broadcast_status(logs_qs: list, app_status: MacroStatus, adapter_name: str = "Unknown"):
+    """Send status update to all WebSocket clients."""
+    status_msg = {
+        'type': 'status',
+        'status': f"Running: {app_status.iterations} iterations" if app_status.name else "Idle",
+        'macro_name': app_status.name or "No macro loaded",
+        'adapter_name': adapter_name,
+        'iterations': app_status.iterations
+    }
+    
+    for q in logs_qs:
+        try:
+            q.put_nowait(status_msg)
+        except Exception:
+            try:
+                q.put(status_msg)
+            except Exception:
+                pass
+
+def broadcast_log(logs_qs: list, message: str, level: str = 'info'):
+    """Send log message to all WebSocket clients."""
+    log_msg = {
+        'type': 'log',
+        'message': message,
+        'level': level
+    }
+    
+    for q in logs_qs:
+        try:
+            q.put_nowait(log_msg)
+        except Exception:
+            try:
+                q.put(log_msg)
+            except Exception:
+                pass
+
 async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: list, status: Optional[MacroStatus]=None, preferred_adapter: Optional[str]=None):
     try:
-        for q in logs_qs:
-            try:
-                q.put_nowait('worker: starting')
-            except Exception:
-                try:
-                    q.put('worker: starting')
-                except Exception:
-                    pass
+        broadcast_log(logs_qs, 'worker: starting')
 
         commands = []
         if macro_file:
@@ -85,49 +114,17 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                     text = p.read_text()
                     commands = parse_macro(text)
                 else:
-                    for q in logs_qs:
-                        try:
-                            q.put_nowait(f'Initial macro not found: {macro_file}')
-                        except Exception:
-                            try:
-                                q.put(f'Initial macro not found: {macro_file}')
-                            except Exception:
-                                pass
+                    broadcast_log(logs_qs, f'Initial macro not found: {macro_file}', 'warning')
             except Exception as e:
-                for q in logs_qs:
-                    try:
-                        q.put_nowait(f'Error reading initial macro {macro_file}: {e}')
-                    except Exception:
-                        try:
-                            q.put(f'Error reading initial macro {macro_file}: {e}')
-                        except Exception:
-                            pass
-        for q in logs_qs:
-            try:
-                q.put_nowait(f'worker: parsed {len(commands)} commands')
-            except Exception:
-                try:
-                    q.put(f'worker: parsed {len(commands)} commands')
-                except Exception:
-                    pass
+                broadcast_log(logs_qs, f'Error reading initial macro {macro_file}: {e}', 'error')
+        broadcast_log(logs_qs, f'worker: parsed {len(commands)} commands')
 
-        for q in logs_qs:
-            try:
-                q.put_nowait('worker: creating and connecting adapter (prioritizing Pico)')
-            except Exception:
-                try:
-                    q.put('worker: creating and connecting adapter (prioritizing Pico)')
-                except Exception:
-                    pass
+        broadcast_log(logs_qs, 'worker: creating and connecting adapter (prioritizing Pico)')
+        
         adapter = await create_adapter(preferred_adapter)  # Factory handles connection automatically
-        for q in logs_qs:
-            try:
-                q.put_nowait('worker: adapter connected')
-            except Exception:
-                try:
-                    q.put('worker: adapter connected')
-                except Exception:
-                    pass
+        adapter_name = adapter.__class__.__name__ if adapter else "No adapter"
+        broadcast_log(logs_qs, 'worker: adapter connected', 'success')
+        broadcast_status(logs_qs, app_status, adapter_name)
 
         app_status = status if status is not None else MacroStatus()
 
@@ -186,14 +183,7 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
         async def cmd_handler():
             while True:
                 cmd = await loop.run_in_executor(None, cmd_q.get)
-                for q in logs_qs:
-                    try:
-                        q.put_nowait(f'worker: got cmd: {cmd}')
-                    except Exception:
-                        try:
-                            q.put(f'worker: got cmd: {cmd}')
-                        except Exception:
-                            pass
+                broadcast_log(logs_qs, f'worker: got cmd: {cmd}', 'info')
                 if cmd == 'pause':
                     try:
                         try:

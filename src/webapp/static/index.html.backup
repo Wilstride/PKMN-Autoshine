@@ -49,14 +49,8 @@
         </div>
       </div>
 
-    </div>
-
-    <!-- Settings Panel -->
-    <div class="card settings-panel">
-      <h2><i class="fas fa-cog"></i> Settings</h2>
-      
-      <div class="settings-section">
-        <h3><i class="fas fa-bell"></i> Alert Settings</h3>
+      <div class="controls-section">
+        <h3 style="margin-bottom: 12px;"><i class="fas fa-bell"></i> Alert Settings</h3>
         <div class="alert-settings">
           <div class="form-group">
             <label for="alert_interval">Alert every X iterations (0 = disabled):</label>
@@ -76,8 +70,8 @@
         </div>
       </div>
 
-      <div class="settings-section">
-        <h3><i class="fas fa-plug"></i> Adapter Settings</h3>
+      <div class="controls-section">
+        <h3 style="margin-bottom: 12px;"><i class="fas fa-cog"></i> Adapter Settings</h3>
         <div class="adapter-grid">
           <div class="form-group">
             <label for="adapter_select">Preferred Adapter:</label>
@@ -95,38 +89,54 @@
       </div>
     </div>
 
-    <div class="card status-display compact">
-      <h2><i class="fas fa-info-circle"></i> Status</h2>
+    <div class="card status-display">
+      <h2><i class="fas fa-info-circle"></i> Status Monitor</h2>
       
-      <div class="status-grid">
-        <div class="status-item">
-          <span class="status-label">Connection:</span>
-          <span class="connection-indicator">
+      <div class="status-card" id="status-card">
+        <div class="status-label">
+          <i class="fas fa-circle"></i> Current Status
+          <div class="connection-indicator">
             <span class="connection-dot" id="ws-indicator"></span>
             <span id="ws-status">Connecting...</span>
-          </span>
+          </div>
         </div>
-        <div class="status-item">
-          <span class="status-label">System:</span>
-          <span class="status-value" id="status">Initializing...</span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Macro:</span>
-          <span class="status-value" id="macro_details">No macro loaded</span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Adapter:</span>
-          <span class="status-value" id="adapter_status">Checking...</span>
-        </div>
+        <div class="status-content" id="status">Initializing...</div>
+      </div>
+
+      <div class="status-card">
+        <div class="status-label"><i class="fas fa-play"></i> Macro Details</div>
+        <div class="status-content" id="macro_details">No macro loaded</div>
+      </div>
+
+      <div class="status-card">
+        <div class="status-label"><i class="fas fa-plug"></i> Adapter Status</div>
+        <div class="status-content" id="adapter_status">Checking connectivity...</div>
       </div>
     </div>
 
     <div class="editor-section">
-      <div class="card macro-manager">
-        <h2><i class="fas fa-code"></i> Macro Management</h2>
-        <div class="macro-editor-controls">
-          <button id="edit_macro" class="primary"><i class="fas fa-edit"></i> Edit Selected Macro</button>
-          <button id="new_macro" class="success"><i class="fas fa-file-plus"></i> Create New Macro</button>
+      <div class="card editor-container">
+        <div class="editor-header">
+          <h2><i class="fas fa-code"></i> Macro Editor</h2>
+          <div class="editor-controls">
+            <input id="macro_name" type="text" placeholder="Enter filename.txt" style="width: 200px;">
+            <button id="save_macro" class="success"><i class="fas fa-save"></i> Save</button>
+            <button id="new_macro"><i class="fas fa-file-plus"></i> New</button>
+          </div>
+        </div>
+        <div id="editor-wrapper">
+          <textarea id="macro_editor" placeholder="# Enter your macro commands here...
+# Available commands:
+# PRESS <button>     - Press a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
+# STICK <stick> <x> <y> - Move analog stick (l or r, coordinates -1.0 to 1.0)  
+# SLEEP <seconds>    - Wait for specified time
+# 
+# Example:
+# PRESS a
+# SLEEP 0.5
+# STICK l 0.0 1.0
+# SLEEP 0.1"></textarea>
+          <textarea id="mobile-fallback-editor" class="mobile-fallback-editor"></textarea>
         </div>
       </div>
 
@@ -642,30 +652,17 @@ SLEEP 0.1`;
       }
     }
 
-    // Log management with 20 entry limit
-    let logEntries = [];
-    const MAX_LOG_ENTRIES = 20;
-    
+    // Log management
     function addLogMessage(message, type = 'info') {
+      const logContent = document.getElementById('log');
       const timestamp = new Date().toLocaleTimeString();
       const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'info' ? 'ℹ️' : '📝';
-      const logEntry = `[${timestamp}] ${prefix} ${message}`;
       
-      logEntries.push(logEntry);
-      
-      // Keep only the latest 20 entries
-      if (logEntries.length > MAX_LOG_ENTRIES) {
-        logEntries = logEntries.slice(-MAX_LOG_ENTRIES);
-      }
-      
-      // Update display
-      const logContent = document.getElementById('log');
-      logContent.textContent = logEntries.join('\n');
+      logContent.textContent += `[${timestamp}] ${prefix} ${message}\n`;
       logContent.scrollTop = logContent.scrollHeight;
     }
 
     function clearLog() {
-      logEntries = [];
       document.getElementById('log').textContent = '';
       addLogMessage('Log cleared');
     }
@@ -752,9 +749,6 @@ SLEEP 0.1`;
         
         // Update select dropdown
         document.getElementById('macro_select').value = name;
-        
-        // Close modal
-        hideModal();
       } catch (error) {
         console.error('Failed to save macro:', error);
         addLogMessage(`Failed to save macro: ${error.message}`, 'error');
@@ -762,14 +756,11 @@ SLEEP 0.1`;
     }
 
     function newMacro() {
-      if (editor) {
-        editor.setValue('# New macro\n# Enter your commands here...\n\n');
-      }
+      editor.setValue('# New macro\n# Enter your commands here...\n\n');
       document.getElementById('macro_name').value = '';
+      document.getElementById('macro_select').value = '';
       currentMacroName = '';
-      document.getElementById('modal-title').innerHTML = '<i class="fas fa-plus"></i> Create New Macro';
-      showModal();
-      addLogMessage('Creating new macro', 'info');
+      addLogMessage('Created new macro', 'info');
     }
 
     async function runMacro() {
@@ -803,46 +794,6 @@ SLEEP 0.1`;
       } catch (error) {
         console.error('Failed to run macro:', error);
         addLogMessage(`Failed to run macro: ${error.message}`, 'error');
-      }
-    }
-
-    // Modal functions
-    function showModal() {
-      document.getElementById('macro-modal').style.display = 'flex';
-      setTimeout(() => {
-        if (editor && editor.refresh) {
-          editor.refresh();
-          editor.focus();
-        }
-      }, 100);
-    }
-    
-    function hideModal() {
-      document.getElementById('macro-modal').style.display = 'none';
-    }
-    
-    async function editMacro() {
-      const selectedMacro = document.getElementById('macro_select').value;
-      if (!selectedMacro) {
-        addLogMessage('Please select a macro to edit', 'warning');
-        return;
-      }
-      
-      try {
-        const res = await fetch(`/api/macro/${encodeURIComponent(selectedMacro)}`);
-        if (res.ok) {
-          const content = await res.text();
-          if (editor) {
-            editor.setValue(content);
-          }
-          document.getElementById('macro_name').value = selectedMacro;
-          document.getElementById('modal-title').innerHTML = '<i class="fas fa-edit"></i> Edit Macro: ' + selectedMacro;
-          showModal();
-        } else {
-          addLogMessage('Failed to load macro', 'error');
-        }
-      } catch (error) {
-        addLogMessage('Error loading macro: ' + error.message, 'error');
       }
     }
 
@@ -988,16 +939,8 @@ SLEEP 0.1`;
       // Macro controls
       document.getElementById('run_macro').onclick = runMacro;
       document.getElementById('macro_select').onchange = (e) => loadMacro(e.target.value);
-      document.getElementById('edit_macro').onclick = editMacro;
-      document.getElementById('new_macro').onclick = newMacro;
       document.getElementById('save_macro').onclick = saveMacro;
-      
-      // Modal controls
-      document.getElementById('modal-close').onclick = hideModal;
-      document.getElementById('cancel_edit').onclick = hideModal;
-      document.getElementById('macro-modal').onclick = (e) => {
-        if (e.target.id === 'macro-modal') hideModal();
-      };
+      document.getElementById('new_macro').onclick = newMacro;
 
       // Adapter controls
       document.getElementById('set_adapter').onclick = setAdapter;
@@ -1019,9 +962,6 @@ SLEEP 0.1`;
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
           e.preventDefault();
           saveMacro();
-        }
-        if (e.key === 'Escape') {
-          hideModal();
         }
       });
     }
@@ -1050,43 +990,5 @@ SLEEP 0.1`;
     // Start the application when page loads
     document.addEventListener('DOMContentLoaded', initialize);
   </script>
-
-  <!-- Macro Editor Modal -->
-  <div id="macro-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modal-title"><i class="fas fa-code"></i> Edit Macro</h2>
-        <button class="modal-close" id="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="macro_name">Filename:</label>
-          <input id="macro_name" type="text" placeholder="Enter filename.txt" style="width: 100%;">
-        </div>
-        <div id="editor-wrapper">
-          <textarea id="macro_editor" placeholder="# Enter your macro commands here...
-# Available commands:
-# PRESS <button>     - Press a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
-# STICK <stick> <x> <y> - Move analog stick (l or r, coordinates -1.0 to 1.0)  
-# SLEEP <seconds>    - Wait for specified time
-# LOOP <count>       - Start a loop (repeat commands until ENDLOOP)
-# ENDLOOP           - End a loop
-# 
-# Example:
-# PRESS a
-# SLEEP 0.5
-# LOOP 3
-#   STICK l 0.0 1.0
-#   SLEEP 0.1
-# ENDLOOP"></textarea>
-          <textarea id="mobile-fallback-editor" class="mobile-fallback-editor"></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="save_macro" class="success"><i class="fas fa-save"></i> Save</button>
-        <button id="cancel_edit" class="secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
 </body>
 </html>

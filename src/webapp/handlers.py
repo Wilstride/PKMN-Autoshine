@@ -29,8 +29,16 @@ async def websocket_handler(request):
 
     async def log_forwarder():
         while True:
-            msg = await loop.run_in_executor(None, logs_q.get)
-            await ws.send_str(json.dumps({'type':'log','msg': msg}))
+            try:
+                msg = await loop.run_in_executor(None, logs_q.get)
+                if isinstance(msg, dict):
+                    # Message is already structured
+                    await ws.send_str(json.dumps(msg))
+                else:
+                    # Legacy string message
+                    await ws.send_str(json.dumps({'type':'log','message': msg}))
+            except Exception:
+                break
 
     forwarder = asyncio.create_task(log_forwarder())
 
@@ -190,5 +198,52 @@ async def api_set_alerts(request):
             'alert_interval': alert_interval,
             'message': f'Alert interval set to {alert_interval} iterations' if alert_interval > 0 else 'Alerts disabled'
         })
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+
+
+async def api_command(request):
+    """Generic command API endpoint for sending commands to the worker."""
+    try:
+        data = await request.json()
+        command = data.get('command')
+        
+        if not command:
+            return web.Response(status=400, text='command required')
+        
+        cmd_q: 'queue.Queue' = request.app['cmd_q']
+        
+        if command == 'run_macro':
+            setup_macro = data.get('setup_macro')
+            main_macro = data.get('main_macro')
+            
+            if not main_macro:
+                return web.Response(status=400, text='main_macro required')
+            
+            # Send load command with both setup and main macro
+            if setup_macro:
+                cmd_q.put(f'load:{main_macro}:{setup_macro}')
+            else:
+                cmd_q.put(f'load:{main_macro}')
+                
+        elif command == 'set_alerts':
+            interval = data.get('interval', 0)
+            # Validate interval
+            if not isinstance(interval, int) or interval < 0 or interval > 10000:
+                return web.Response(status=400, text='Invalid alert interval')
+            cmd_q.put(f'alert:{interval}')
+            
+        elif command == 'set_adapter':
+            adapter = data.get('adapter', '')
+            cmd_q.put(f'adapter:{adapter}')
+            
+        elif command in ['pause', 'resume', 'force_stop', 'test_adapters']:
+            cmd_q.put(command)
+            
+        else:
+            return web.Response(status=400, text=f'Unknown command: {command}')
+        
+        return web.json_response({'status': 'ok', 'command': command})
+        
     except Exception as e:
         return web.Response(status=500, text=str(e))
