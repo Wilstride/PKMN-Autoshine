@@ -1,0 +1,3 @@
+[submodule "PicoSwitchController"]
+	path = PicoSwitchController
+	url = https://github.com/Wilstride/PicoSwitchController

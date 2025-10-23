@@ -1,2 +1,5 @@
-joycontrol
+external/
 __pycache__
+build/
+.venv/
+.vscode/

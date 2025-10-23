@@ -29,11 +29,14 @@ async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int 
     term_logger = asyncio.create_task(terminal_log_printer())
 
     macro_status = worker.MacroStatus()
+    
+    # Store adapter preference in a mutable container (None = auto-detect, prioritizing Pico)
+    adapter_config = {'preferred': None}
 
     def _start_worker():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(worker.worker_main(macro_file, cmd_q, [logs_term_q, logs_ws_q,], status=macro_status))
+        loop.run_until_complete(worker.worker_main(macro_file, cmd_q, [logs_term_q, logs_ws_q,], status=macro_status, preferred_adapter=adapter_config['preferred']))
 
     worker_thread = threading.Thread(target=_start_worker, daemon=True)
     worker_thread.start()
@@ -43,6 +46,7 @@ async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int 
     app['logs_ws_q'] = logs_ws_q
     app['macro_status'] = macro_status
     app['shutdown_event'] = asyncio.Event()
+    app['adapter_config'] = adapter_config
 
     app.router.add_get('/', handlers.index)
     app.router.add_get('/ws', handlers.websocket_handler)
@@ -53,6 +57,9 @@ async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int 
     app.router.add_post('/api/stop', handlers.api_stop)
     app.router.add_post('/api/restart_host', handlers.api_restart_host)
     app.router.add_post('/api/stop_host', handlers.api_stop_host)
+    app.router.add_get('/api/adapters', handlers.api_list_adapters)
+    app.router.add_get('/api/adapters/status', handlers.api_adapter_status)
+    app.router.add_post('/api/adapters/select', handlers.api_select_adapter)
 
     async def api_status(request):
         return web.json_response(request.app['macro_status'].to_dict())
