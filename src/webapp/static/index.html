@@ -82,6 +82,7 @@
     let ws;
     let wsReconnectInterval;
     let currentMacroName = '';
+    let alertIntervalUserModified = false;
 
     // Utility function to detect mobile devices
     function isMobileDevice() {
@@ -514,10 +515,10 @@ SLEEP 0.1`;
           showAlert(status.iterations);
         }
         
-        // Update alert interval UI if it changed (but don't overwrite if user is editing)
-        if (status.alert_interval !== undefined) {
+        // Update alert interval UI if it changed (but don't overwrite if user has modified it)
+        if (status.alert_interval !== undefined && !alertIntervalUserModified) {
           const alertInput = document.getElementById('alert_interval');
-          // Only update if the input is not currently focused (being edited)
+          // Only update if the input is not currently focused
           if (document.activeElement !== alertInput) {
             alertInput.value = status.alert_interval;
           }
@@ -812,6 +813,8 @@ SLEEP 0.1`;
     
     // Settings modal functions
     function showSettings() {
+      // Reset the alert interval modification flag when opening settings
+      alertIntervalUserModified = false;
       document.getElementById('settings-modal').style.display = 'flex';
     }
     
@@ -867,6 +870,8 @@ SLEEP 0.1`;
         
         if (!res.ok) throw new Error(`Failed to set alerts: ${res.status}`);
         
+        // Reset the user modified flag since the setting was successfully applied
+        alertIntervalUserModified = false;
         addLogMessage(`Alert interval set to ${interval} iterations${interval === 0 ? ' (disabled)' : ''}`, 'success');
       } catch (error) {
         console.error('Failed to set alerts:', error);
@@ -1021,6 +1026,15 @@ SLEEP 0.1`;
         if (this.checked) {
           requestNotificationPermission();
         }
+      };
+      
+      // Alert interval input listeners to prevent automatic updates while user is editing
+      const alertIntervalInput = document.getElementById('alert_interval');
+      alertIntervalInput.oninput = function() {
+        alertIntervalUserModified = true;
+      };
+      alertIntervalInput.onfocus = function() {
+        alertIntervalUserModified = true;
       };
 
       // Log controls
