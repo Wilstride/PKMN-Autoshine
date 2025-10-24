@@ -1,17 +1,41 @@
-"""CLI entrypoint implementation.
+"""Command-line interface implementation for macro execution.
 
-Moved heavy logic from top-level `cli.py` into this module so the launcher
-stays small and easier to trace/debug.
+This module provides the core CLI functionality for executing macro files
+using either Pico W firmware or joycontrol Bluetooth adapters. It supports
+single-file execution or interactive session mode with automatic adapter
+detection and fallback.
+
+The module was separated from the top-level cli.py launcher to keep the
+entry point simple while providing comprehensive CLI functionality here.
+
+Example:
+    Single macro file execution::
+    
+        adapter = await _create_adapter()
+        await run_single_file(adapter, Path("macro.txt"))
+        
+    Interactive session::
+    
+        adapter = await _create_adapter()
+        await run_interactive_session(adapter)
+
+Note:
+    This module automatically tries Pico W adapter first, then falls back
+    to joycontrol if the Pico is unavailable. Users can override this
+    behavior by specifying a preferred adapter type.
 """
 from __future__ import annotations
 
-import logging
-import asyncio
-import time
-import sys
 import argparse
-from adapter.base import Button, Stick
-from macro_parser import parse_macro, run_macro, MacroRunner
+import asyncio
+import logging
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+from adapter.base import BaseAdapter, Button, Stick
+from macro_parser import MacroRunner, parse_macro, run_macro
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -19,8 +43,15 @@ logging.basicConfig(
 )
 
 
-async def _create_adapter():
-    """Create adapter with automatic fallback: Pico W first, then joycontrol."""
+async def _create_adapter() -> BaseAdapter:
+    """Create adapter with automatic fallback: Pico W first, then joycontrol.
+    
+    Returns:
+        Connected adapter instance ready for macro execution.
+        
+    Raises:
+        SystemExit: If no adapter can be connected successfully.
+    """
     from adapter.factory import create_adapter
     
     try:
@@ -30,43 +61,82 @@ async def _create_adapter():
         sys.exit(1)
 
 
-async def main():
-    parser = argparse.ArgumentParser(description='Run Pokemon macros with optional setup')
-    parser.add_argument('main_macro', help='Main macro file to repeat (e.g., plza_travel_cafe.txt)')
-    parser.add_argument('--setup', '-s', help='Setup macro to run once before main macro (e.g., system_open_game.txt)')
+async def main() -> None:
+    """Main CLI entry point for macro execution.
+    
+    Parses command-line arguments to configure macro execution with optional
+    setup sequences. Supports both one-time setup macros and repeating main
+    macros with real-time progress monitoring.
+    
+    Command-line Arguments:
+        main_macro: Path to main macro file that will repeat continuously
+        --setup/-s: Optional setup macro that runs once before main macro
+        
+    The function:
+        1. Parses command-line arguments for macro files
+        2. Creates and connects to an adapter (Pico W or joycontrol)
+        3. Loads and validates macro files from data/macros/ directory
+        4. Executes setup macro once if provided
+        5. Runs main macro in a loop with progress tracking
+        6. Handles graceful shutdown on Ctrl+C
+        
+    Raises:
+        SystemExit: If macro files cannot be loaded or adapter fails to connect
+    """
+    parser = argparse.ArgumentParser(
+        description='Run Pokemon macros with optional setup',
+        epilog='Use Ctrl+C to stop execution gracefully'
+    )
+    parser.add_argument(
+        'main_macro', 
+        help='Main macro file to repeat (e.g., plza_travel_cafe.txt)'
+    )
+    parser.add_argument(
+        '--setup', '-s', 
+        help='Setup macro to run once before main macro (e.g., system_open_game.txt)'
+    )
     
     args = parser.parse_args()
     
+    # Create and connect adapter
     adapter = await _create_adapter()
 
     try:
         runner = MacroRunner(adapter)
         
-        # Load main macro
+        # Load and validate main macro file
+        main_macro_path = Path('data/macros') / args.main_macro
         try:
-            with open(f'data/macros/{args.main_macro}') as f:
+            with main_macro_path.open('r', encoding='utf-8') as f:
                 main_commands = parse_macro(f.read())
             runner.set_commands(main_commands)
             print(f"Loaded main macro: {args.main_macro} ({len(main_commands)} commands)")
+        except FileNotFoundError:
+            print(f"ERROR: Main macro file not found: {main_macro_path}")
+            sys.exit(1)
         except Exception as e:
             print(f"ERROR: Failed to load main macro '{args.main_macro}': {e}")
             sys.exit(1)
         
-        # Load setup macro if specified
+        # Load and validate setup macro if specified
         if args.setup:
+            setup_macro_path = Path('data/macros') / args.setup
             try:
-                with open(f'data/macros/{args.setup}') as f:
+                with setup_macro_path.open('r', encoding='utf-8') as f:
                     setup_commands = parse_macro(f.read())
                 runner.set_setup_commands(setup_commands)
                 print(f"Loaded setup macro: {args.setup} ({len(setup_commands)} commands)")
+            except FileNotFoundError:
+                print(f"ERROR: Setup macro file not found: {setup_macro_path}")
+                sys.exit(1)
             except Exception as e:
                 print(f"ERROR: Failed to load setup macro '{args.setup}': {e}")
                 sys.exit(1)
         
-        # Use the runner's built-in logging
+        # Initialize logging and execution monitoring
         logs = runner.logs()
         
-        # Start the runner
+        # Display execution plan and start runner
         print(f"\nStarting macro execution...")
         if args.setup:
             print(f"Setup: {args.setup} (runs once)")
@@ -75,38 +145,36 @@ async def main():
         
         await runner.start()
         
-        # Monitor logs and provide feedback
-        count = 0
-        start = time.time()
+        # Monitor execution with progress tracking
+        cycle_count = 0
+        start_time = time.time()
         
         try:
             while runner.is_running():
                 try:
-                    # Get log messages with a timeout (logs.get_nowait is sync, logs.get is async)
-                    try:
-                        msg = logs.get_nowait()
-                        print(f"[LOG] {msg}")
-                        
-                        # Track iterations
-                        if isinstance(msg, str) and "iteration" in msg and "start" in msg:
-                            count += 1
-                            elapsed = time.time() - start
-                            avg_time = elapsed / count if count > 0 else 0
-                            print(f"✓ Starting cycle {count} after {elapsed:.2f}s (avg: {avg_time:.2f}s per cycle)")
-                    except:
-                        # No logs available right now, wait a bit
-                        await asyncio.sleep(0.1)
-                        continue
-                        
-                except Exception as e:
-                    print(f"Error reading logs: {e}")
-                    break
+                    # Process log messages for progress tracking
+                    msg = logs.get_nowait()
+                    print(f"[LOG] {msg}")
                     
+                    # Track iteration cycles for user feedback
+                    if (isinstance(msg, str) and 
+                        "iteration" in msg and 
+                        "start" in msg):
+                        cycle_count += 1
+                        elapsed_time = time.time() - start_time
+                        avg_cycle_time = elapsed_time / cycle_count if cycle_count > 0 else 0
+                        print(f"✓ Starting cycle {cycle_count} after {elapsed_time:.2f}s "
+                              f"(avg: {avg_cycle_time:.2f}s per cycle)")
+                except:
+                    # No logs available, wait briefly before checking again
+                    await asyncio.sleep(0.1)
+                    continue
+                        
         except KeyboardInterrupt:
             print(f"\n\n⏹ Stopping...")
             await runner.stop()
-            elapsed = time.time() - start
-            print(f"✓ Stopped after {count} cycles ({elapsed:.2f}s total)")
+            elapsed_time = time.time() - start_time
+            print(f"✓ Stopped after {cycle_count} cycles ({elapsed_time:.2f}s total)")
             
     finally:
         # Clean up adapter connection

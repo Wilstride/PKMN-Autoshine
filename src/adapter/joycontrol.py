@@ -1,31 +1,111 @@
-# Compatibility function for Poohl/joycontrol commit 3e80cb315dab8c2e2daedc80d447836b7d4d85f7
+"""Joycontrol Bluetooth adapter for Nintendo Switch controller emulation.
+
+This module provides a joycontrol-based adapter that emulates a Nintendo Switch
+Pro Controller over Bluetooth. It uses the joycontrol library to handle the
+complex Bluetooth HID protocol and controller state management.
+
+The adapter provides:
+    - Bluetooth HID device emulation as Nintendo Switch Pro Controller
+    - Direct connection to Nintendo Switch console
+    - Full controller state management including buttons and analog sticks
+    - Compatibility with the joycontrol library ecosystem
+
+Example:
+    Basic usage::
+    
+        adapter = JoycontrolAdapter()
+        await adapter.connect()  # Waits for Switch to pair
+        await adapter.press(Button.A, duration=0.5)
+        await adapter.stick(Stick.L_STICK, h=0.5, v=-0.5)
+
+Hardware Requirements:
+    - Bluetooth adapter supporting HID device mode
+    - Linux system with proper Bluetooth stack configuration
+    - Nintendo Switch in controller pairing mode
+
+Dependencies:
+    This adapter requires the joycontrol library and its dependencies.
+    Install with the instructions in the joycontrol documentation.
+
+Protocol:
+    Uses the joycontrol library which implements the full Nintendo Switch
+    Pro Controller Bluetooth HID protocol including pairing, authentication,
+    and report transmission.
+"""
+
 import asyncio
-from typing import Union
+from typing import Optional, Union
 
-from .base import BaseAdapter, Button, Stick
+from adapter.base import BaseAdapter, Button, Stick
 
-from joycontrol.protocol import controller_protocol_factory
-from joycontrol.server import create_hid_server
+# joycontrol imports - these may not be available on all systems
 from joycontrol.controller import Controller
 from joycontrol.memory import FlashMemory
+from joycontrol.protocol import controller_protocol_factory
+from joycontrol.server import create_hid_server
 
 class JoycontrolAdapter(BaseAdapter):
-    """Adapter that implements controller actions using the bundled joycontrol.
+    """Adapter implementing Nintendo Switch Pro Controller via joycontrol.
 
-    This provides async methods: connect, press, and stick which the main
-    script can call without depending on concrete joycontrol internals.
+    This adapter uses the joycontrol library to emulate a Nintendo Switch
+    Pro Controller over Bluetooth. It handles the complex HID protocol,
+    controller state management, and Bluetooth pairing automatically.
+    
+    The adapter creates a virtual Pro Controller that the Nintendo Switch
+    recognizes as an authentic controller, allowing full control over
+    games and system navigation.
+    
+    Attributes:
+        controller_type: Type of controller to emulate (default: PRO_CONTROLLER)
+        _ctrl: Internal controller state object from joycontrol
+        _transport: Bluetooth transport layer
+        _protocol: Controller communication protocol
+        _stick_mid: Cached middle position for analog sticks
+        _stick_max_half: Cached maximum half-range for stick calculations
     """
 
-    def __init__(self, controller_type: str = Controller.PRO_CONTROLLER):
+    def __init__(self, controller_type: str = Controller.PRO_CONTROLLER) -> None:
+        """Initialize the joycontrol adapter.
+        
+        Args:
+            controller_type: Type of controller to emulate. Should be one of
+                           the Controller constants from joycontrol.controller.
+                           Default is PRO_CONTROLLER for full feature support.
+                           
+        Example:
+            Create Pro Controller adapter::
+            
+                adapter = JoycontrolAdapter()
+                
+            Create Joy-Con adapter::
+            
+                from joycontrol.controller import Controller
+                adapter = JoycontrolAdapter(Controller.JOYCON_L)
+                
+        Note:
+            The controller type affects available buttons and features.
+            PRO_CONTROLLER provides the most complete button set.
+        """
+        super().__init__()
         self.controller_type = controller_type
-        self._ctrl = None
-        self._transport = None
-        self._protocol = None
+        self._ctrl: Optional[object] = None
+        self._transport: Optional[object] = None
+        self._protocol: Optional[object] = None
 
-        self._stick_mid = None
-        self._stick_max_half = None
+        # Stick position caching for coordinate calculations
+        self._stick_mid: Optional[int] = None
+        self._stick_max_half: Optional[int] = None
 
-    async def _create_ctrl(self):
+    async def _create_ctrl(self) -> None:
+        """Create and initialize the joycontrol controller objects.
+        
+        Sets up the controller protocol, HID server, and transport layer
+        required for Bluetooth communication with the Nintendo Switch.
+        
+        Raises:
+            RuntimeError: If joycontrol components fail to initialize
+            OSError: If Bluetooth adapter is not available or accessible
+        """
         spi_flash = FlashMemory()
         factory = controller_protocol_factory(self.controller_type, spi_flash=spi_flash)
         transport, protocol = await create_hid_server(factory)
@@ -35,18 +115,61 @@ class JoycontrolAdapter(BaseAdapter):
         self._ctrl = ctrl
 
     async def connect(self) -> None:
-        """Create controller objects and wait for a Switch connection."""
+        """Establish Bluetooth connection and wait for Nintendo Switch pairing.
+        
+        Creates the controller objects if needed, then initiates Bluetooth
+        pairing mode and waits for a Nintendo Switch to connect. The Switch
+        must be in controller pairing mode for this to succeed.
+        
+        Raises:
+            RuntimeError: If controller objects cannot be created
+            ConnectionError: If Bluetooth pairing fails or times out
+            OSError: If Bluetooth adapter is not available
+            
+        Example:
+            Connect and wait for Switch::
+            
+                adapter = JoycontrolAdapter()
+                await adapter.connect()  # Waits for Switch to pair
+                print("Connected to Nintendo Switch!")
+                
+        Note:
+            This method blocks until a Switch successfully pairs with the
+            controller. Ensure the Switch is in pairing mode before calling.
+        """
         if self._ctrl is None:
             await self._create_ctrl()
 
-        # The controller has its own connect method
+        # Wait for Nintendo Switch to connect and complete pairing
         await self._ctrl.connect()
     
     async def press(self, btn: Button, duration: float = 0.1) -> None:
-        """Press a button using the controller state and send the report.
-
-        `btn` can be a `Button` enum member or a raw string accepted by
-        `button_state.set_button`.
+        """Press and release a controller button.
+        
+        Simulates pressing a button for the specified duration. The button
+        state is set to pressed, a report is sent, then after the duration
+        the button is released and another report is sent.
+        
+        Args:
+            btn: Button to press (Button enum value or compatible string)
+            duration: Time to hold the button in seconds (default: 0.1)
+            
+        Raises:
+            RuntimeError: If the adapter is not connected
+            ValueError: If the button identifier is invalid
+            
+        Example:
+            Press A button briefly::
+            
+                await adapter.press(Button.A)
+                
+            Hold B button for 1 second::
+            
+                await adapter.press(Button.B, duration=1.0)
+                
+        Note:
+            Button names should match those supported by joycontrol.
+            The adapter automatically handles report transmission.
         """
         if self._ctrl is None:
             await self.connect()
