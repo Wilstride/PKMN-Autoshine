@@ -38,7 +38,7 @@ import asyncio
 import logging
 import serial
 import serial.tools.list_ports
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 from adapter.base import BaseAdapter, Button, Stick
 
@@ -146,8 +146,8 @@ class PicoAdapter(BaseAdapter):
         except OSError as e:
             raise RuntimeError(f"Cannot access port {self.port}: {e}")
         
-        # Allow firmware time to stabilize after connection
-        await asyncio.sleep(1.0)
+        # Allow minimal firmware time to stabilize after connection
+        await asyncio.sleep(0.1)
         
         # Send a test command to verify connection
         await self._send_command("# Connection test")
@@ -183,9 +183,10 @@ class PicoAdapter(BaseAdapter):
         
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self.serial.write, command_bytes)
+        await loop.run_in_executor(None, self.serial.flush)
         
-        # Small delay to allow command processing
-        await asyncio.sleep(0.01)
+        # Small delay to allow command processing - reduced but not eliminated
+        await asyncio.sleep(0.002)
 
     async def press(self, btn: Button | str, duration: float = 0.1) -> None:
         """Press a button for the specified duration.
@@ -275,6 +276,20 @@ class PicoAdapter(BaseAdapter):
         if self.serial:
             self.serial.close()
             self.serial = None
+
+    async def send_batch_commands(self, commands: List[str]) -> None:
+        """Send multiple commands in a single batch to reduce communication overhead.
+        
+        Args:
+            commands: List of command strings to send.
+        """
+        if self.serial is None:
+            raise RuntimeError("Not connected to Pico. Call connect() first.")
+        
+        # Send commands individually with small delays for stability
+        for command in commands:
+            await self._send_command(command)
+            await asyncio.sleep(0.001)  # 1ms between batch commands
 
     def __del__(self):
         """Ensure serial connection is closed."""

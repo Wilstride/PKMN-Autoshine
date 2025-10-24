@@ -37,6 +37,21 @@ async def run_commands(
     Raises:
         ValueError: If an unknown command is encountered.
     """
+    # Check if adapter supports batch commands for optimization
+    if hasattr(adapter, 'send_batch_commands'):
+        await _run_commands_optimized(adapter, commands, log_queue, pause_event, stop_event)
+    else:
+        await _run_commands_sequential(adapter, commands, log_queue, pause_event, stop_event)
+
+
+async def _run_commands_sequential(
+    adapter,
+    commands: List[Tuple[str, List[str]]],
+    log_queue: Optional['Queue'] = None,
+    pause_event: Optional['Event'] = None,
+    stop_event: Optional['Event'] = None
+) -> None:
+    """Execute commands one by one (original implementation)."""
     executor = CommandExecutor(adapter, log_queue)
     
     for cmd, args in commands:
@@ -55,6 +70,68 @@ async def run_commands(
         except ValueError as e:
             # Re-raise command errors with context
             raise ValueError(f'Error executing {cmd} command: {e}')
+
+
+async def _run_commands_optimized(
+    adapter,
+    commands: List[Tuple[str, List[str]]],
+    log_queue: Optional['Queue'] = None,
+    pause_event: Optional['Event'] = None,
+    stop_event: Optional['Event'] = None
+) -> None:
+    """Execute commands with batching optimization for supported adapters."""
+    executor = CommandExecutor(adapter, log_queue)
+    
+    # Group non-SLEEP commands into batches
+    batch = []
+    
+    for cmd, args in commands:
+        # Check if stop was requested
+        if stop_event is not None and stop_event.is_set():
+            executor.log('stopped')
+            return
+        
+        # Wait for resume if paused
+        if pause_event is not None:
+            await pause_event.wait()
+        
+        if cmd == 'SLEEP':
+            # Send any pending batch before processing SLEEP
+            if batch:
+                await adapter.send_batch_commands(batch)
+                executor.log(f'Sent batch of {len(batch)} commands')
+                batch = []
+            
+            # Execute SLEEP individually (it needs special handling)
+            try:
+                await _execute_single_command(executor, cmd, args, stop_event, pause_event)
+            except ValueError as e:
+                raise ValueError(f'Error executing {cmd} command: {e}')
+        else:
+            # Add non-SLEEP commands to batch
+            try:
+                batch_cmd = _convert_to_batch_command(cmd, args)
+                batch.append(batch_cmd)
+                executor.log(f'{cmd} {" ".join(args)}')
+            except ValueError as e:
+                raise ValueError(f'Error converting {cmd} command: {e}')
+    
+    # Send any remaining batched commands
+    if batch:
+        await adapter.send_batch_commands(batch)
+        executor.log(f'Sent final batch of {len(batch)} commands')
+
+
+def _convert_to_batch_command(cmd: str, args: List[str]) -> str:
+    """Convert a command and arguments to batch command format."""
+    if cmd in ['PRESS', 'HOLD', 'RELEASE', 'STICK']:
+        return f"{cmd} {' '.join(args)}"
+    elif cmd == 'CENTER_STICKS':
+        return "CENTER_STICKS"
+    elif cmd == 'RELEASE_ALL':
+        return "RELEASE_ALL"
+    else:
+        raise ValueError(f'Unknown command for batching: {cmd}')
 
 
 async def _execute_single_command(

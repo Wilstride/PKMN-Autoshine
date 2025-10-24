@@ -1,11 +1,9 @@
 # Close controller pairing menu
-PRESS a
-SLEEP 0.5
-
-# Go to home menu
-PRESS home
-SLEEP 0.5
-
-# Return to game
-PRESS home
-SLEEP 0.5
+HOLD a
+RELEASE a
+HOLD b
+RELEASE b
+HOLD x
+RELEASE x
+HOLD y
+RELEASE y
