@@ -30,7 +30,7 @@ let alertIntervalUserModified = false;
 let logEntries = [];
 let lastLogMessage = '';
 let logRepeatCount = 0;
-const MAX_LOG_ENTRIES = 20;
+let maxLogEntries = 20; // Default fallback
 const SPAM_MESSAGES = [
   'Could not find Pico W device',
   'No module named \'joycontrol\'',
@@ -38,6 +38,31 @@ const SPAM_MESSAGES = [
   'Attempting to reconnect',
   'WebSocket disconnected'
 ];
+
+/**
+ * Calculate the maximum number of log entries that can fit in the logs content area.
+ * @returns {number} Maximum number of log entries that fit without growing the container
+ */
+function calculateMaxLogEntries() {
+  const logContent = document.getElementById('log');
+  if (!logContent) return 20; // Fallback if element not found
+  
+  // Get computed styles
+  const styles = window.getComputedStyle(logContent);
+  const fontSize = parseFloat(styles.fontSize) || 13;
+  const lineHeight = parseFloat(styles.lineHeight) || (fontSize * 1.5);
+  
+  // Get available height (total height minus padding)
+  const paddingTop = parseFloat(styles.paddingTop) || 16;
+  const paddingBottom = parseFloat(styles.paddingBottom) || 16;
+  const availableHeight = logContent.clientHeight - paddingTop - paddingBottom;
+  
+  // Calculate how many lines can fit
+  const maxLines = Math.floor(availableHeight / lineHeight);
+  
+  // Ensure we have at least 5 lines and at most 50 lines
+  return Math.max(5, Math.min(50, maxLines));
+}
 
 // ============================================================================
 // Device Detection and Editor Utilities
@@ -655,16 +680,16 @@ function addLogMessage(message, type = 'info') {
   
   logEntries.push(logEntry);
   
-  // Keep only the latest entries
-  if (logEntries.length > MAX_LOG_ENTRIES) {
-    logEntries = logEntries.slice(-MAX_LOG_ENTRIES);
+  // Calculate current max entries and keep only the latest entries that fit
+  maxLogEntries = calculateMaxLogEntries();
+  if (logEntries.length > maxLogEntries) {
+    logEntries = logEntries.slice(-maxLogEntries);
   }
   
   // Update display
   const logContent = document.getElementById('log');
   if (logContent) {
-    logContent.textContent = logEntries.join('\\n');
-    logContent.scrollTop = logContent.scrollHeight;
+    logContent.textContent = logEntries.join('\n');
   }
 }
 
@@ -677,5 +702,31 @@ function clearLog() {
   if (logContent) logContent.textContent = '';
   addLogMessage('Log cleared');
 }
+
+// Initialize log capacity calculation when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Initial calculation
+  maxLogEntries = calculateMaxLogEntries();
+  
+  // Recalculate on window resize with debouncing
+  let resizeTimeout;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(function() {
+      const newMaxEntries = calculateMaxLogEntries();
+      if (newMaxEntries !== maxLogEntries) {
+        maxLogEntries = newMaxEntries;
+        // Trim log entries if needed
+        if (logEntries.length > maxLogEntries) {
+          logEntries = logEntries.slice(-maxLogEntries);
+          const logContent = document.getElementById('log');
+          if (logContent) {
+            logContent.textContent = logEntries.join('\n');
+          }
+        }
+      }
+    }, 250); // 250ms debounce
+  });
+});
 
 // Continue in next part due to length...

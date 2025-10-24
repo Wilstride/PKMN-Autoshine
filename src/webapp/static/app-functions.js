@@ -111,7 +111,7 @@ async function saveMacro() {
  */
 function newMacro() {
   if (editor) {
-    editor.setValue('# New macro\\n# Enter your commands here...\\n\\n');
+    editor.setValue('# New macro\n# Enter your commands here...\n\n');
   }
   
   const macroNameElement = document.getElementById('macro_name');
@@ -195,7 +195,7 @@ async function editMacro() {
   }
   
   try {
-    const res = await fetch(`/api/macro/${encodeURIComponent(selectedMacro)}`);
+    const res = await fetch(`/api/macros/${encodeURIComponent(selectedMacro)}`);
     if (res.ok) {
       const content = await res.text();
       if (editor) {

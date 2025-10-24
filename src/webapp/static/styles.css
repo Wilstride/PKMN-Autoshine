@@ -433,26 +433,9 @@ select:focus, input[type="text"]:focus {
   line-height: 1.5;
   padding: 16px;
   flex-grow: 1;
-  overflow-y: auto;
+  overflow: hidden;
   white-space: pre-wrap;
   border-radius: 0 0 12px 12px;
-}
-
-.logs-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.logs-content::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
-
-.logs-content::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 4px;
-}
-
-.logs-content::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-primary);
 }
 
 .log-content::-webkit-scrollbar {
