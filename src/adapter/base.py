@@ -144,6 +144,37 @@ class BaseAdapter(abc.ABC):
         """
 
     @abc.abstractmethod
+    async def hold(self, btn: Button) -> None:
+        """Hold a controller button down without releasing.
+        
+        Presses and holds a button indefinitely until explicitly released
+        with the release() method or release_all_buttons().
+        
+        Args:
+            btn: Button to hold (Button enum value or compatible string)
+            
+        Raises:
+            ValueError: If btn is not a valid button identifier
+            RuntimeError: If the adapter is not connected or ready
+        """
+
+    @abc.abstractmethod
+    async def release(self, btn: Button) -> None:
+        """Release a specific controller button.
+        
+        Releases a button that was previously held down by hold() or press().
+        This method is idempotent - releasing an already released button
+        has no effect.
+        
+        Args:
+            btn: Button to release (Button enum value or compatible string)
+            
+        Raises:
+            ValueError: If btn is not a valid button identifier
+            RuntimeError: If the adapter is not connected or ready
+        """
+
+    @abc.abstractmethod
     async def stick(
         self, 
         stick: Stick = Stick.L_STICK, 

@@ -60,6 +60,42 @@ class CommandExecutor:
         self.log(f'PRESS {button.name}')
         await self.adapter.press(button)
 
+    async def execute_hold_command(self, args: List[str]) -> None:
+        """Execute a HOLD command to hold a button down.
+        
+        Args:
+            args: Command arguments, first should be button name.
+            
+        Raises:
+            ValueError: If button name is invalid or missing.
+        """
+        if not args:
+            raise ValueError('HOLD command requires a button name')
+        
+        button_name = args[0].upper()
+        button = self._parse_button(button_name)
+        
+        self.log(f'HOLD {button.name}')
+        await self.adapter.hold(button)
+
+    async def execute_release_command(self, args: List[str]) -> None:
+        """Execute a RELEASE command to release a button.
+        
+        Args:
+            args: Command arguments, first should be button name.
+            
+        Raises:
+            ValueError: If button name is invalid or missing.
+        """
+        if not args:
+            raise ValueError('RELEASE command requires a button name')
+        
+        button_name = args[0].upper()
+        button = self._parse_button(button_name)
+        
+        self.log(f'RELEASE {button.name}')
+        await self.adapter.release(button)
+
     async def execute_sleep_command(
         self, 
         args: List[str], 
@@ -224,6 +260,10 @@ async def run_macro(adapter, commands: List[tuple], dry_run: bool = False) -> No
         if dry_run:
             if cmd == 'PRESS':
                 print(f'DRY PRESS {args[0] if args else "UNKNOWN"}')
+            elif cmd == 'HOLD':
+                print(f'DRY HOLD {args[0] if args else "UNKNOWN"}')
+            elif cmd == 'RELEASE':
+                print(f'DRY RELEASE {args[0] if args else "UNKNOWN"}')
             elif cmd == 'SLEEP':
                 print(f'DRY SLEEP {args[0] if args else "0"}s')
             elif cmd == 'STICK':
@@ -236,6 +276,10 @@ async def run_macro(adapter, commands: List[tuple], dry_run: bool = False) -> No
         else:
             if cmd == 'PRESS':
                 await executor.execute_press_command(args)
+            elif cmd == 'HOLD':
+                await executor.execute_hold_command(args)
+            elif cmd == 'RELEASE':
+                await executor.execute_release_command(args)
             elif cmd == 'SLEEP':
                 await executor.execute_sleep_command(args)
             elif cmd == 'STICK':

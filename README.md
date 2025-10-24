@@ -385,6 +385,8 @@ PKMN-Autoshine uses a simple text-based macro language for defining automation s
 ```
 # Comments start with # and are ignored
 PRESS <button>      # Press and release a button (a, b, x, y, home, plus, etc.)
+HOLD <button>       # Hold a button down (without releasing)
+RELEASE <button>    # Release a button that was held
 STICK <stick> <h> <v>  # Move analog stick (l/r stick, horizontal, vertical)
 SLEEP <seconds>     # Wait for specified number of seconds
 ```
@@ -407,6 +409,13 @@ ENDLOOP
 # Press A button
 PRESS a
 SLEEP 2
+
+# Hold R button down while doing other actions
+HOLD r
+PRESS a
+SLEEP 1
+PRESS b
+RELEASE r  # Release the R button
 
 # Repeat the following actions 5 times
 LOOP 5

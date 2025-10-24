@@ -68,7 +68,7 @@ async def _execute_single_command(
     
     Args:
         executor: CommandExecutor instance.
-        cmd: Command name (PRESS, SLEEP, STICK).
+        cmd: Command name (PRESS, HOLD, RELEASE, SLEEP, STICK).
         args: Command arguments.
         stop_event: Optional event for stopping execution.
         pause_event: Optional event for pausing execution.
@@ -78,6 +78,10 @@ async def _execute_single_command(
     """
     if cmd == 'PRESS':
         await executor.execute_press_command(args)
+    elif cmd == 'HOLD':
+        await executor.execute_hold_command(args)
+    elif cmd == 'RELEASE':
+        await executor.execute_release_command(args)
     elif cmd == 'SLEEP':
         await executor.execute_sleep_command(args, stop_event, pause_event)
     elif cmd == 'STICK':

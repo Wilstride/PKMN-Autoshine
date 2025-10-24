@@ -98,7 +98,9 @@
         <div id="editor-wrapper">
           <textarea id="macro_editor" placeholder="# Enter your macro commands here...
 # Available commands:
-# PRESS <button>     - Press a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
+# PRESS <button>     - Press and release a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
+# HOLD <button>      - Hold a button down (without releasing)
+# RELEASE <button>   - Release a button that was held
 # STICK <stick> <x> <y> - Move analog stick (l or r, coordinates -1.0 to 1.0)  
 # SLEEP <seconds>    - Wait for specified time
 # LOOP <count>       - Start a loop (repeat commands until ENDLOOP)
@@ -107,6 +109,9 @@
 # Example:
 # PRESS a
 # SLEEP 0.5
+# HOLD r     # Hold R button
+# PRESS b    # Press B while holding R
+# RELEASE r  # Release R button
 # LOOP 3
 #   STICK l 0.0 1.0
 #   SLEEP 0.1

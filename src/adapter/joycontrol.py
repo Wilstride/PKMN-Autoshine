@@ -180,6 +180,45 @@ class JoycontrolAdapter(BaseAdapter):
         self._ctrl.button_state.set_button(btn.value, False)
         await self._ctrl.send()
 
+    async def hold(self, btn: Button) -> None:
+        """Hold a controller button down without releasing.
+        
+        Sets the button state to pressed and sends a report, but does not
+        automatically release the button. Use release() to release it later.
+        
+        Args:
+            btn: Button to hold (Button enum value or compatible string)
+            
+        Raises:
+            RuntimeError: If the adapter is not connected
+            ValueError: If the button identifier is invalid
+        """
+        if self._ctrl is None:
+            await self.connect()
+
+        self._ctrl.button_state.set_button(btn.value, True)
+        await self._ctrl.send()
+
+    async def release(self, btn: Button) -> None:
+        """Release a specific controller button.
+        
+        Sets the button state to released and sends a report. This method
+        is idempotent - releasing an already released button has no effect.
+        
+        Args:
+            btn: Button to release (Button enum value or compatible string)
+            
+        Raises:
+            RuntimeError: If the adapter is not connected
+            ValueError: If the button identifier is invalid
+        """
+        if self._ctrl is None:
+            # If not connected, nothing to release
+            return
+
+        self._ctrl.button_state.set_button(btn.value, False)
+        await self._ctrl.send()
+
     async def release_all_buttons(self) -> None:
         """Release all buttons known in the Button enum and send a report."""
         if self._ctrl is None:

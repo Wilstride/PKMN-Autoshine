@@ -203,6 +203,32 @@ class PicoAdapter(BaseAdapter):
         await asyncio.sleep(duration)
         await self._send_command(f"RELEASE {btn_str}")
 
+    async def hold(self, btn: Button | str) -> None:
+        """Hold a button down without releasing.
+        
+        Args:
+            btn: Button to hold (Button enum or string).
+        """
+        if isinstance(btn, Button):
+            btn_str = btn.value
+        else:
+            btn_str = str(btn)
+        
+        await self._send_command(f"HOLD {btn_str}")
+
+    async def release(self, btn: Button | str) -> None:
+        """Release a specific button.
+        
+        Args:
+            btn: Button to release (Button enum or string).
+        """
+        if isinstance(btn, Button):
+            btn_str = btn.value
+        else:
+            btn_str = str(btn)
+        
+        await self._send_command(f"RELEASE {btn_str}")
+
     async def stick(self, stick: Stick | str = Stick.L_STICK, h: Union[int, float] = 0x0800, v: Union[int, float] = 0x0800) -> None:
         """Move an analog stick to the specified position.
         
