@@ -5,7 +5,7 @@ separation of concerns between command implementation, execution logic,
 and session management.
 
 Components:
-- commands: Individual command implementations (PRESS, SLEEP, STICK)
+- commands: Individual command implementations (HOLD, RELEASE, SLEEP, STICK)
 - runner_core: Core command sequence execution logic
 - session: MacroRunner class for session management
 

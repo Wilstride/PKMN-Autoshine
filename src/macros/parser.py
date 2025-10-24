@@ -197,30 +197,33 @@ def flatten_commands(commands: List[Command]) -> List[Tuple[str, List[str]]]:
     """Flatten structured commands into a simple execution sequence.
     
     Recursively expands all LOOP structures into repeated command sequences,
-    producing a flat list suitable for direct execution by command runners.
+    and converts PRESS commands into HOLD immediately followed by RELEASE
+    for direct execution by command runners.
     
     Args:
         commands: List of structured commands (may contain nested loops)
         
     Returns:
-        Flat list of (command_name, arguments) tuples with all loops expanded.
+        Flat list of (command_name, arguments) tuples with all loops expanded
+        and PRESS commands converted to HOLD/RELEASE pairs.
         
     Example:
-        Flatten loop structures::
+        Flatten and convert PRESS commands::
         
             structured = [
-                ('PRESS', ['A', '0.1']),
-                ('LOOP', ['3'], [('PRESS', ['B', '0.1'])]),
-                ('PRESS', ['C', '0.1'])
+                ('PRESS', ['A']),
+                ('LOOP', ['2'], [('PRESS', ['B'])]),
+                ('HOLD', ['C'])
             ]
             flattened = flatten_commands(structured)
-            # Returns: [('PRESS', ['A', '0.1']), ('PRESS', ['B', '0.1']),
-            #           ('PRESS', ['B', '0.1']), ('PRESS', ['B', '0.1']),
-            #           ('PRESS', ['C', '0.1'])]
+            # Returns: [('HOLD', ['A']), ('RELEASE', ['A']),
+            #           ('HOLD', ['B']), ('RELEASE', ['B']),
+            #           ('HOLD', ['B']), ('RELEASE', ['B']),
+            #           ('HOLD', ['C'])]
             
     Note:
-        Large loop counts will produce large command lists. Be careful with
-        memory usage for macros with many iterations.
+        PRESS commands are converted to: HOLD <button>, RELEASE <button>
+        Large loop counts will produce large command lists.
     """
     result = []
     
@@ -233,7 +236,18 @@ def flatten_commands(commands: List[Command]) -> List[Tuple[str, List[str]]]:
             for _ in range(count):
                 result.extend(flatten_commands(loop_body))
         else:
-            # Simple command - add directly to result
-            result.append(cmd)
+            # Convert PRESS commands to HOLD immediately followed by RELEASE
+            cmd_name, args = cmd[0], cmd[1]
+            if cmd_name == 'PRESS':
+                if not args:
+                    raise ValueError("PRESS command requires at least a button name")
+                
+                button = args[0]
+                # Convert PRESS to HOLD + RELEASE (no sleep between)
+                result.append(('HOLD', [button]))
+                result.append(('RELEASE', [button]))
+            else:
+                # All other commands pass through unchanged
+                result.append(cmd)
     
     return result

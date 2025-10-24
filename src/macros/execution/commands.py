@@ -1,7 +1,7 @@
 """Individual macro command implementations.
 
 This module provides implementations for all supported macro commands
-including PRESS, SLEEP, and STICK with proper validation and error handling.
+including HOLD, RELEASE, SLEEP, and STICK with proper validation and error handling.
 """
 from __future__ import annotations
 
@@ -42,23 +42,7 @@ class CommandExecutor:
                 # Silently ignore queue errors
                 pass
 
-    async def execute_press_command(self, args: List[str]) -> None:
-        """Execute a PRESS command to press a button.
-        
-        Args:
-            args: Command arguments, first should be button name.
-            
-        Raises:
-            ValueError: If button name is invalid or missing.
-        """
-        if not args:
-            raise ValueError('PRESS command requires a button name')
-        
-        button_name = args[0].upper()
-        button = self._parse_button(button_name)
-        
-        self.log(f'PRESS {button.name}')
-        await self.adapter.press(button)
+
 
     async def execute_hold_command(self, args: List[str]) -> None:
         """Execute a HOLD command to hold a button down.
@@ -258,9 +242,7 @@ async def run_macro(adapter, commands: List[tuple], dry_run: bool = False) -> No
     
     for cmd, args in commands:
         if dry_run:
-            if cmd == 'PRESS':
-                print(f'DRY PRESS {args[0] if args else "UNKNOWN"}')
-            elif cmd == 'HOLD':
+            if cmd == 'HOLD':
                 print(f'DRY HOLD {args[0] if args else "UNKNOWN"}')
             elif cmd == 'RELEASE':
                 print(f'DRY RELEASE {args[0] if args else "UNKNOWN"}')
@@ -274,9 +256,7 @@ async def run_macro(adapter, commands: List[tuple], dry_run: bool = False) -> No
             else:
                 print(f'DRY UNKNOWN: {cmd} {args}')
         else:
-            if cmd == 'PRESS':
-                await executor.execute_press_command(args)
-            elif cmd == 'HOLD':
+            if cmd == 'HOLD':
                 await executor.execute_hold_command(args)
             elif cmd == 'RELEASE':
                 await executor.execute_release_command(args)

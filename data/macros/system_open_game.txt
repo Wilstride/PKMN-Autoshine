@@ -1,9 +1,5 @@
 # Close controller pairing menu
-HOLD a
-RELEASE a
-HOLD b
-RELEASE b
-HOLD x
-RELEASE x
-HOLD y
-RELEASE y
+PRESS a
+PRESS b
+PRESS x
+PRESS y

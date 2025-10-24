@@ -124,7 +124,7 @@ async def _run_commands_optimized(
 
 def _convert_to_batch_command(cmd: str, args: List[str]) -> str:
     """Convert a command and arguments to batch command format."""
-    if cmd in ['PRESS', 'HOLD', 'RELEASE', 'STICK']:
+    if cmd in ['HOLD', 'RELEASE', 'STICK']:
         return f"{cmd} {' '.join(args)}"
     elif cmd == 'CENTER_STICKS':
         return "CENTER_STICKS"
@@ -145,7 +145,7 @@ async def _execute_single_command(
     
     Args:
         executor: CommandExecutor instance.
-        cmd: Command name (PRESS, HOLD, RELEASE, SLEEP, STICK).
+        cmd: Command name (HOLD, RELEASE, SLEEP, STICK).
         args: Command arguments.
         stop_event: Optional event for stopping execution.
         pause_event: Optional event for pausing execution.
@@ -153,9 +153,7 @@ async def _execute_single_command(
     Raises:
         ValueError: If command is unknown or invalid.
     """
-    if cmd == 'PRESS':
-        await executor.execute_press_command(args)
-    elif cmd == 'HOLD':
+    if cmd == 'HOLD':
         await executor.execute_hold_command(args)
     elif cmd == 'RELEASE':
         await executor.execute_release_command(args)

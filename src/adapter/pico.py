@@ -191,6 +191,9 @@ class PicoAdapter(BaseAdapter):
     async def press(self, btn: Button | str, duration: float = 0.1) -> None:
         """Press a button for the specified duration.
         
+        This method implements the BaseAdapter interface for direct API usage.
+        Macro PRESS commands are converted to HOLD+RELEASE by the parser.
+        
         Args:
             btn: Button to press (Button enum or string).
             duration: Duration to hold the button in seconds.
@@ -200,7 +203,8 @@ class PicoAdapter(BaseAdapter):
         else:
             btn_str = str(btn)
         
-        await self._send_command(f"PRESS {btn_str}")
+        # Direct implementation using HOLD + SLEEP + RELEASE
+        await self._send_command(f"HOLD {btn_str}")
         await asyncio.sleep(duration)
         await self._send_command(f"RELEASE {btn_str}")
 
