@@ -20,41 +20,64 @@ from adapter.factory import create_adapter
 class MacroStatus:
     def __init__(self):
         self.name = None
-        self.start_time = None
         self.iterations = 0
         self.last_iter_time = None
         self.sec_per_iter = None
-        self.paused = False
-        self.pause_start = None
-        self.paused_total = 0.0
-        self.stopped = False  # Track if macro is completely stopped
-        self.stopped_runtime = 0.0  # Store final runtime when stopped
+        
+        # Simple runtime tracking
+        self.total_runtime = 0.0  # Total accumulated runtime in seconds
+        self.session_start = None  # When current session started
+        self.is_running = False   # Whether macro is currently running
+        
+        # Alert system
         self.alert_interval = 0  # 0 = disabled, >0 = alert every N iterations
         self.last_alert_iteration = 0
         self.pending_alert = False  # Flag to indicate alert should be sent to client
+
+    def start_session(self):
+        """Start a new running session."""
+        if not self.is_running:
+            self.session_start = time.time()
+            self.is_running = True
+
+    def pause_session(self):
+        """Pause the current session, accumulating runtime."""
+        if self.is_running and self.session_start is not None:
+            # Add session time to total
+            self.total_runtime += (time.time() - self.session_start)
+            self.session_start = None
+            self.is_running = False
+
+    def stop_session(self):
+        """Stop the current session, accumulating runtime."""
+        if self.is_running and self.session_start is not None:
+            # Add session time to total
+            self.total_runtime += (time.time() - self.session_start)
+            self.session_start = None
+            self.is_running = False
+
+    def get_current_runtime(self):
+        """Get current total runtime in seconds."""
+        runtime = self.total_runtime
+        if self.is_running and self.session_start is not None:
+            runtime += (time.time() - self.session_start)
+        return runtime
+
+    def reset_all_metrics(self):
+        """Reset all metrics to zero."""
+        self.iterations = 0
+        self.last_iter_time = None
+        self.sec_per_iter = None
+        self.total_runtime = 0.0
+        self.session_start = None
+        self.is_running = False
+        self.last_alert_iteration = 0
+        self.pending_alert = False
     def to_dict(self):
-        runtime = '0:00'
-        if self.start_time is not None:
-            now = time.time()
-            total_paused = self.paused_total
-            
-            # If currently paused, add current pause duration
-            if self.paused and self.pause_start is not None:
-                total_paused += (now - self.pause_start)
-            
-            # Ensure total_paused is never negative
-            total_paused = max(0, total_paused)
-            
-            # If stopped, show the runtime at the point when it was stopped
-            if self.stopped:
-                dt = int(self.stopped_runtime) if self.stopped_runtime > 0 else 0
-                h, m, s = dt//3600, (dt%3600)//60, dt%60
-                runtime = f"{h}:{m:02d}:{s:02d}"
-            else:
-                dt = int(now - self.start_time - total_paused)
-                if dt > 0:
-                    h, m, s = dt//3600, (dt%3600)//60, dt%60
-                    runtime = f"{h}:{m:02d}:{s:02d}"
+        # Get current runtime
+        runtime_seconds = int(self.get_current_runtime())
+        h, m, s = runtime_seconds//3600, (runtime_seconds%3600)//60, runtime_seconds%60
+        runtime = f"{h}:{m:02d}:{s:02d}"
         
         result = {
             'name': self.name,
@@ -79,49 +102,6 @@ class MacroStatus:
                 self.last_alert_iteration = self.iterations
                 return True
         return False
-
-    def reset_metrics(self):
-        """Reset all metrics back to zero."""
-        self.start_time = None
-        self.iterations = 0
-        self.last_iter_time = None
-        self.sec_per_iter = None
-        self.paused_total = 0.0
-        self.pause_start = None
-        self.paused = False
-        self.stopped = False
-        self.stopped_runtime = 0.0
-        self.last_alert_iteration = 0
-        self.pending_alert = False
-
-    def pause_runtime(self):
-        """Pause the runtime tracking."""
-        if not self.paused and not self.stopped:
-            self.paused = True
-            self.pause_start = time.time()
-
-    def stop_runtime(self):
-        """Stop the runtime tracking completely."""
-        if self.start_time is not None:
-            now = time.time()
-            total_paused = self.paused_total
-            if self.paused and self.pause_start is not None:
-                total_paused += (now - self.pause_start)
-            self.stopped_runtime = now - self.start_time - total_paused
-        self.paused = False
-        self.pause_start = None
-        self.stopped = True
-
-    def resume_runtime(self):
-        """Resume the runtime tracking."""
-        if self.paused and self.pause_start is not None:
-            # Add the current pause duration to the total paused time
-            pause_duration = time.time() - self.pause_start
-            self.paused_total += pause_duration
-        # Clear pause state
-        self.paused = False
-        self.pause_start = None
-        self.stopped = False
 
 
 def broadcast_status(logs_qs: list, app_status: MacroStatus, adapter_name: str = "Unknown"):
@@ -201,11 +181,8 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                     if msg.startswith('=== iteration'):
                         st = app_status
                         now = time.time()
-                        if st.start_time is None:
-                            st.start_time = now
-                        # If resuming from pause, ensure we're not stopped
-                        if st.stopped:
-                            st.stopped = False
+                        
+                        # Update iteration timing
                         if st.last_iter_time is not None:
                             st.sec_per_iter = now - st.last_iter_time
                         st.last_iter_time = now
@@ -221,17 +198,15 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                                         q.put(f'ALERT: Completed {st.iterations} iterations')
                                     except Exception:
                                         pass
-                    if msg.startswith('Loaded macro:'):
+                    elif msg.startswith('Loaded macro:'):
                         parts = msg.split(':',1)[1].strip().split(' ',1)
                         st = app_status
                         st.name = parts[0]
                         # Don't reset metrics when loading a new macro - keep accumulating
-                        # Only reset if explicitly requested via reset_metrics command
-                        st.stopped = False  # Allow runtime to continue if macro starts running
                     elif msg.startswith('Macro stopped') or msg.startswith('Macro finished') or msg.startswith('Executed macro once:') or msg.startswith('Run-once macro') and 'completed' in msg:
                         # Stop runtime tracking when macro completes
                         st = app_status
-                        st.stop_runtime()
+                        st.stop_session()
                 except Exception:
                     pass
                 for q in logs_qs:
@@ -254,7 +229,7 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         if runner.is_running():
                             broadcast_log(logs_qs, 'Pausing macro - will stop after current iteration completes...', 'warning')
                             await runner.pause()
-                            app_status.pause_runtime()  # Pause runtime tracking
+                            app_status.pause_session()  # Pause runtime tracking
                             broadcast_log(logs_qs, 'Pause requested - macro will stop after current iteration.', 'info')
                         else:
                             broadcast_log(logs_qs, 'No macro is currently running', 'warning')
@@ -262,7 +237,7 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         broadcast_log(logs_qs, f'Error pausing runner: {e}', 'error')
                 elif cmd == 'resume':
                     try:
-                        app_status.resume_runtime()  # Resume runtime tracking
+                        app_status.start_session()  # Resume runtime tracking
                         runner.resume()
                     except Exception:
                         pass
@@ -270,6 +245,9 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                     try:
                         await runner.stop()
                         await runner.start()
+                        # Only start runtime tracking if runner has commands to run
+                        if hasattr(runner, '_commands') and runner._commands and len(runner._commands) > 0:
+                            app_status.start_session()
                     except Exception as e:
                         for q in logs_qs:
                             try:
@@ -285,7 +263,7 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                 elif cmd == 'force_stop':
                     try:
                         await runner.force_stop()
-                        app_status.stop_runtime()  # Stop runtime tracking completely
+                        app_status.stop_session()  # Stop runtime tracking completely
                         broadcast_log(logs_qs, 'Macro force stopped', 'warning')
                     except Exception as e:
                         broadcast_log(logs_qs, f'Error force stopping: {e}', 'error')
@@ -303,7 +281,7 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                                 pass
                 elif cmd == 'reset_metrics':
                     try:
-                        app_status.reset_metrics()
+                        app_status.reset_all_metrics()
                         broadcast_log(logs_qs, 'Metrics reset to zero', 'success')
                     except Exception as e:
                         broadcast_log(logs_qs, f'Error resetting metrics: {e}', 'error')
@@ -353,16 +331,9 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         
                         # Update status
                         try:
-                            current_name = app_status.name
                             app_status.name = name
-                            # Don't reset metrics for run_once - keep accumulating
-                            # Only reset if explicitly requested via reset_metrics command
-                            # Only resume if we were paused/stopped and it's the same macro
-                            if (app_status.paused or app_status.stopped) and current_name == name:
-                                app_status.resume_runtime()
-                            elif app_status.stopped:
-                                # If stopped but different macro, just clear stopped state
-                                app_status.stopped = False
+                            # Don't reset metrics for run_once - keep accumulating runtime
+                            # Runtime will start when first iteration begins
                         except Exception:
                             pass
                         
@@ -373,14 +344,17 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         run_once_task_ref = asyncio.create_task(run_once_task())
                         runner._task = run_once_task_ref  # Store task reference for force_stop
                         
+                        # Start runtime tracking for run_once
+                        app_status.start_session()
+                        
                         try:
                             await run_once_task_ref
                             # Stop runtime when run_once completes successfully
-                            app_status.stop_runtime()
+                            app_status.stop_session()
                         except asyncio.CancelledError:
                             broadcast_log(logs_qs, f'Run-once macro {name} was force stopped', 'warning')
                             # Also stop runtime when cancelled
-                            app_status.stop_runtime()
+                            app_status.stop_session()
                         finally:
                             runner._task = None
                         
@@ -430,17 +404,12 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                         
                         await runner.stop()
                         await runner.start()
+                        # Only start runtime tracking if commands were actually loaded
+                        if new_commands and len(new_commands) > 0:
+                            app_status.start_session()
                         try:
-                            # If we were paused or stopped AND loading the same macro, resume runtime
-                            # If loading a different macro, don't resume (continue accumulating)
-                            current_name = app_status.name
                             app_status.name = name
-                            # Only resume if we were paused/stopped and it's the same macro
-                            if (app_status.paused or app_status.stopped) and current_name == name:
-                                app_status.resume_runtime()
-                            elif app_status.stopped:
-                                # If stopped but different macro, just clear stopped state
-                                app_status.stopped = False
+                            # Don't reset metrics when loading - keep accumulating runtime
                         except Exception:
                             pass
                         
@@ -469,6 +438,9 @@ async def worker_main(macro_file: Optional[str], cmd_q: 'queue.Queue', logs_qs: 
                                     pass
 
         await runner.start()
+        # Only start runtime tracking if there are commands to run
+        if commands and len(commands) > 0:
+            app_status.start_session()
         await asyncio.gather(forward_rlogs(), cmd_handler())
     except Exception as e:
         tb = traceback.format_exc()

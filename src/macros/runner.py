@@ -342,6 +342,7 @@ class MacroRunner:
         try:
             if self.log_queue is not None:
                 try:
+                    self.log_queue.put_nowait('=== iteration 1 start ===')  # Generate iteration message for counting
                     self.log_queue.put_nowait('=== running macro once ===')
                 except Exception:
                     pass
