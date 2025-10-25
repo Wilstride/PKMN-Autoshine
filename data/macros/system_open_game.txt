@@ -1,5 +1,9 @@
 # Close controller pairing menu
 PRESS a
+SLEEP 0.1
 PRESS b
+SLEEP 0.1
 PRESS x
+SLEEP 0.1
 PRESS y
+SLEEP 0.1
