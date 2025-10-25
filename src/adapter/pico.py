@@ -374,7 +374,7 @@ class PicoAdapter(BaseAdapter):
             macro_content: Original macro content with PRESS commands and seconds timing.
             
         Returns:
-            Processed macro content with PRESS flattened to HOLD+SLEEP+RELEASE and frame timing.
+            Processed macro content with PRESS flattened to HOLD+RELEASE and frame timing.
         """
         lines = macro_content.split('\n')
         processed_lines = []
@@ -397,18 +397,17 @@ class PicoAdapter(BaseAdapter):
             args = parts[1:] if len(parts) > 1 else []
             
             if command == 'PRESS' and args:
-                # Flatten PRESS into HOLD + SLEEP 1 frame + RELEASE
+                # Flatten PRESS into HOLD + RELEASE
                 button = args[0]
                 processed_lines.append(f"HOLD {button}")
-                processed_lines.append("SLEEP 1")  # 1 bluetooth frame
                 processed_lines.append(f"RELEASE {button}")
-                logger.debug(f"Flattened PRESS {button} -> HOLD+SLEEP 1+RELEASE")
+                logger.debug(f"Flattened PRESS {button} -> HOLD+RELEASE")
                 
             elif command == 'SLEEP' and args:
-                # Convert seconds to bluetooth frames (60Hz = 60 frames per second)
+                # Convert seconds to bluetooth frames (125Hz = 125 frames per second)
                 try:
                     seconds = float(args[0])
-                    frames = seconds * 60.0  # 60Hz frame rate
+                    frames = seconds * 125.0  # 100Hz frame rate
                     processed_lines.append(f"SLEEP {frames}")
                     logger.debug(f"Converted SLEEP {seconds}s -> SLEEP {frames} frames")
                 except ValueError:
