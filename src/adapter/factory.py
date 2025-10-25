@@ -36,7 +36,7 @@ from adapter.base import BaseAdapter
 logger = logging.getLogger(__name__)
 
 
-async def create_adapter(preferred: Optional[str] = None) -> BaseAdapter:
+async def create_adapter(preferred: Optional[str] = None, port: Optional[str] = None) -> BaseAdapter:
     """Create an adapter with automatic detection and fallback.
     
     Attempts to create and connect a controller adapter using the specified
@@ -46,6 +46,8 @@ async def create_adapter(preferred: Optional[str] = None) -> BaseAdapter:
     Args:
         preferred: Preferred adapter type ('pico' or 'joycontrol'). 
                   If None, uses automatic detection with Pico W first.
+        port: Specific TTY port for Pico adapter (e.g., '/dev/ttyACM1').
+              If None, will auto-detect available ports.
     
     Returns:
         Connected adapter instance ready for controller commands.
@@ -63,20 +65,27 @@ async def create_adapter(preferred: Optional[str] = None) -> BaseAdapter:
         
             pico_adapter = await create_adapter('pico')
             joy_adapter = await create_adapter('joycontrol')
+            
+        Use specific port::
+        
+            adapter = await create_adapter('pico', '/dev/ttyACM1')
     """
     if preferred == 'joycontrol':
         # User specifically requested joycontrol
         return await _create_joycontrol_adapter()
     elif preferred == 'pico':
         # User specifically requested pico
-        return await _create_pico_adapter()
+        return await _create_pico_adapter(port)
     else:
         # Auto-detect: try Pico first, then joycontrol
-        return await _create_adapter_with_fallback()
+        return await _create_adapter_with_fallback(port)
 
 
-async def _create_adapter_with_fallback() -> BaseAdapter:
+async def _create_adapter_with_fallback(port: Optional[str] = None) -> BaseAdapter:
     """Create adapter with automatic fallback from Pico W to joycontrol.
+    
+    Args:
+        port: Specific TTY port for Pico adapter. If None, will auto-detect.
     
     Returns:
         Connected adapter instance.
@@ -87,7 +96,7 @@ async def _create_adapter_with_fallback() -> BaseAdapter:
     # Try Pico W adapter first (generally more reliable)
     try:
         logger.info("Attempting to connect to Pico W firmware...")
-        adapter = await _create_pico_adapter()
+        adapter = await _create_pico_adapter(port)
         logger.info("✓ Connected to Pico W firmware via USB serial")
         return adapter
     except Exception as e:
@@ -110,8 +119,11 @@ async def _create_adapter_with_fallback() -> BaseAdapter:
         )
 
 
-async def _create_pico_adapter() -> BaseAdapter:
+async def _create_pico_adapter(port: Optional[str] = None) -> BaseAdapter:
     """Create and connect a Pico W adapter.
+    
+    Args:
+        port: Specific TTY port to use. If None, will auto-detect.
     
     Returns:
         Connected Pico adapter instance.
@@ -122,7 +134,7 @@ async def _create_pico_adapter() -> BaseAdapter:
         RuntimeError: If adapter initialization fails
     """
     from adapter.pico import PicoAdapter
-    adapter = PicoAdapter()
+    adapter = PicoAdapter(port=port)
     await adapter.connect()
     return adapter
 

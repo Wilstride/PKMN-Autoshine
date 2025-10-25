@@ -16,7 +16,7 @@ from . import handlers
 from . import worker
 
 
-async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int = 8080):
+async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int = 8080, adapter_port: str | None = None):
     cmd_q: 'queue.Queue' = queue.Queue()
     logs_term_q: 'queue.Queue' = queue.Queue()
     logs_broadcast_q: 'queue.Queue' = queue.Queue()
@@ -76,7 +76,7 @@ async def start_server(macro_file: str | None, host: str = '0.0.0.0', port: int 
     def _start_worker():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(worker.worker_main(macro_file, cmd_q, [logs_term_q, logs_broadcast_q,], status=macro_status, preferred_adapter=adapter_config['preferred']))
+        loop.run_until_complete(worker.worker_main(macro_file, cmd_q, [logs_term_q, logs_broadcast_q,], status=macro_status, preferred_adapter=adapter_config['preferred'], adapter_port=adapter_port))
 
     worker_thread = threading.Thread(target=_start_worker, daemon=True)
     worker_thread.start()

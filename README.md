@@ -66,6 +66,9 @@ python cli.py plza_travel_cafe.txt
 # Run automation with setup and main macro
 python cli.py plza_travel_cafe.txt --setup system_open_game.txt
 
+# Run with specific TTY port for Pico adapter (useful for multiple instances)
+python cli.py plza_travel_cafe.txt --adapter-port /dev/ttyACM0
+
 # The setup macro runs once before the main macro starts repeating
 ```
 
@@ -88,9 +91,47 @@ python cli.py plza_travel_cafe.txt --setup system_open_game.txt
 # Force joycontrol adapter  
 python cli.py plza_travel_cafe.txt --adapter joycontrol
 
-# Force joycontrol adapter  
-python cli.py --adapter joycontrol data/macros/plza_travel_cafe.txt
+# Use specific TTY port for Pico adapter
+python cli.py plza_travel_cafe.txt --adapter-port /dev/ttyACM1
+
+# Combine setup macro with specific adapter port
+python cli.py plza_travel_cafe.txt --setup system_open_game.txt --adapter-port /dev/ttyACM1
 ```
+
+### Running Multiple Instances
+
+You can run multiple instances of PKMN-Autoshine on the same system by using different TTY ports for each Pico W device:
+
+#### Hardware Setup
+1. Connect multiple Pico W boards to different USB ports
+2. Each will appear as a separate TTY device (e.g., `/dev/ttyACM0`, `/dev/ttyACM1`)
+3. Pair each Pico W with different Nintendo Switch consoles
+
+#### Software Configuration
+
+**Web Interface (Different Ports)**
+```bash
+# Instance 1: First Pico W on default web port
+python web.py --adapter-port /dev/ttyACM0 --port 8080
+
+# Instance 2: Second Pico W on different web port  
+python web.py --adapter-port /dev/ttyACM1 --port 8081
+
+# Access web interfaces at:
+# http://localhost:8080 (Instance 1)
+# http://localhost:8081 (Instance 2)
+```
+
+**CLI (Different TTY Ports)**
+```bash
+# Terminal 1: First Pico W
+python cli.py plza_travel_cafe.txt --adapter-port /dev/ttyACM0
+
+# Terminal 2: Second Pico W  
+python cli.py plza_travel_wild_area.txt --adapter-port /dev/ttyACM1
+```
+
+This allows automation of multiple Nintendo Switch consoles simultaneously from the same host system.
 
 ## Adapter Integration Details
 
@@ -114,6 +155,13 @@ python web.py
 # Start with specific adapter preference  
 python web.py --adapter pico
 python web.py --adapter joycontrol
+
+# Start with specific TTY port for Pico adapter (useful for multiple instances)
+python web.py --adapter-port /dev/ttyACM0
+python web.py --adapter-port /dev/ttyACM1
+
+# Combine adapter preference with specific port
+python web.py --adapter pico --adapter-port /dev/ttyACM1
 
 # Access web interface at http://localhost:8080
 ```

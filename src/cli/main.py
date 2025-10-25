@@ -43,8 +43,11 @@ logging.basicConfig(
 )
 
 
-async def _create_adapter() -> BaseAdapter:
+async def _create_adapter(port: Optional[str] = None) -> BaseAdapter:
     """Create adapter with automatic fallback: Pico W first, then joycontrol.
+    
+    Args:
+        port: Optional TTY port for Pico adapter (e.g., '/dev/ttyACM1').
     
     Returns:
         Connected adapter instance ready for macro execution.
@@ -55,7 +58,7 @@ async def _create_adapter() -> BaseAdapter:
     from adapter.factory import create_adapter
     
     try:
-        return await create_adapter()
+        return await create_adapter(port=port)
     except RuntimeError as e:
         print(f"\nERROR: {e}")
         sys.exit(1)
@@ -95,11 +98,15 @@ async def main() -> None:
         '--setup', '-s', 
         help='Setup macro to run once before main macro (e.g., system_open_game.txt)'
     )
+    parser.add_argument(
+        '--adapter-port', 
+        help='TTY port for Pico adapter (e.g., /dev/ttyACM0, /dev/ttyACM1)'
+    )
     
     args = parser.parse_args()
     
     # Create and connect adapter
-    adapter = await _create_adapter()
+    adapter = await _create_adapter(args.adapter_port)
 
     try:
         runner = MacroRunner(adapter)

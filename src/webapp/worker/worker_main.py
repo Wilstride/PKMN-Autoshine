@@ -113,7 +113,8 @@ async def worker_main(
     command_queue: queue.Queue, 
     log_queues: List[queue.Queue], 
     status: Optional[MacroStatus] = None, 
-    preferred_adapter: Optional[str] = None
+    preferred_adapter: Optional[str] = None,
+    adapter_port: Optional[str] = None
 ) -> None:
     """Main worker function that coordinates macro execution.
     
@@ -126,6 +127,7 @@ async def worker_main(
         log_queues: List of queues for broadcasting messages to clients.
         status: Optional existing MacroStatus instance to use.
         preferred_adapter: Optional adapter type preference.
+        adapter_port: Optional TTY port for Pico adapter (e.g., '/dev/ttyACM1').
     """
     try:
         broadcast_log_message(log_queues, 'worker: starting', 'info')
@@ -143,7 +145,7 @@ async def worker_main(
         # Initialize status tracker
         macro_status = status if status is not None else MacroStatus()
         
-        adapter = await create_adapter(preferred_adapter)
+        adapter = await create_adapter(preferred_adapter, adapter_port)
         adapter_name = adapter.__class__.__name__ if adapter else "No adapter"
         broadcast_log_message(log_queues, 'worker: adapter connected', 'success')
         broadcast_status_update(log_queues, macro_status, adapter_name)
