@@ -1,4 +1,3 @@
-# Close controller pairing menu
 HOLD b
 RELEASE a
 HOLD x
