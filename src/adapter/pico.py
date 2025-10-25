@@ -295,6 +295,132 @@ class PicoAdapter(BaseAdapter):
             await self._send_command(command)
             await asyncio.sleep(0.001)  # 1ms between batch commands
 
+    async def load_macro_file(self, macro_content: str) -> None:
+        """Load a macro file into the Pico firmware.
+        
+        Args:
+            macro_content: The macro content as a string.
+        """
+        if self.serial is None:
+            raise RuntimeError("Not connected to Pico. Call connect() first.")
+        
+        logger.info("Loading macro into Pico firmware")
+        
+        # Preprocess macro to flatten PRESS commands and convert timing
+        processed_content = self._preprocess_macro(macro_content)
+        
+        # Signal start of macro loading
+        await self._send_command("LOAD_MACRO_START")
+        await asyncio.sleep(0.1)
+        
+        # Send processed macro content line by line
+        lines = processed_content.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line:  # Skip empty lines
+                await self._send_command(line)
+                await asyncio.sleep(0.01)  # Small delay between lines
+        
+        # Signal end of macro loading
+        await self._send_command("LOAD_MACRO_END")
+        await asyncio.sleep(0.1)
+        
+        logger.info("Macro loaded successfully")
+
+    async def start_macro(self) -> None:
+        """Start executing the loaded macro."""
+        await self._send_command("START_MACRO")
+        logger.info("Started macro execution")
+
+    async def stop_macro(self) -> None:
+        """Stop macro execution."""
+        await self._send_command("STOP_MACRO")
+        logger.info("Stopped macro execution")
+
+    async def read_responses(self) -> List[str]:
+        """Read any available responses from the Pico firmware.
+        
+        Returns:
+            List of response lines received from firmware.
+        """
+        if self.serial is None:
+            return []
+        
+        responses = []
+        loop = asyncio.get_event_loop()
+        
+        try:
+            # Check for available data without blocking
+            if self.serial.in_waiting > 0:
+                # Read all available data
+                data = await loop.run_in_executor(None, self.serial.read, self.serial.in_waiting)
+                if data:
+                    text = data.decode('utf-8', errors='ignore')
+                    lines = text.split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if line:
+                            responses.append(line)
+                            logger.debug(f"Received from Pico: {line}")
+        except Exception as e:
+            logger.warning(f"Error reading from Pico: {e}")
+        
+        return responses
+
+    def _preprocess_macro(self, macro_content: str) -> str:
+        """Preprocess macro content to flatten PRESS commands and convert timing.
+        
+        Args:
+            macro_content: Original macro content with PRESS commands and seconds timing.
+            
+        Returns:
+            Processed macro content with PRESS flattened to HOLD+SLEEP+RELEASE and frame timing.
+        """
+        lines = macro_content.split('\n')
+        processed_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                processed_lines.append(line)
+                continue
+            
+            # Parse command and args
+            parts = line.split()
+            if not parts:
+                processed_lines.append(line)
+                continue
+            
+            command = parts[0].upper()
+            args = parts[1:] if len(parts) > 1 else []
+            
+            if command == 'PRESS' and args:
+                # Flatten PRESS into HOLD + SLEEP 1 frame + RELEASE
+                button = args[0]
+                processed_lines.append(f"HOLD {button}")
+                processed_lines.append("SLEEP 1")  # 1 bluetooth frame
+                processed_lines.append(f"RELEASE {button}")
+                logger.debug(f"Flattened PRESS {button} -> HOLD+SLEEP 1+RELEASE")
+                
+            elif command == 'SLEEP' and args:
+                # Convert seconds to bluetooth frames (60Hz = 60 frames per second)
+                try:
+                    seconds = float(args[0])
+                    frames = seconds * 60.0  # 60Hz frame rate
+                    processed_lines.append(f"SLEEP {frames}")
+                    logger.debug(f"Converted SLEEP {seconds}s -> SLEEP {frames} frames")
+                except ValueError:
+                    # If not a valid float, pass through unchanged
+                    processed_lines.append(line)
+                    
+            else:
+                # Pass through other commands unchanged
+                processed_lines.append(line)
+        
+        return '\n'.join(processed_lines)
+
     def __del__(self):
         """Ensure serial connection is closed."""
         self.close()

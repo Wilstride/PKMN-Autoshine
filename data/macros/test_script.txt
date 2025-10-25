@@ -1,1 +1,2 @@
-PRESS b
+HOLD b
+RELEASE b

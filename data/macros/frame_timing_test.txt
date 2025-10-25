@@ -1,0 +1,20 @@
+# Frame-based timing test macro
+# This macro will be preprocessed by the server to convert PRESS to HOLD+SLEEP+RELEASE
+# and convert seconds to frames (125Hz)
+
+# Quick button test - server converts PRESS to HOLD+SLEEP 1+RELEASE
+PRESS a
+SLEEP 0.5    # Server converts to SLEEP 62.5 (frames)
+
+PRESS b  
+SLEEP 0.25   # Server converts to SLEEP 31.25 (frames)
+
+PRESS x
+SLEEP 1.0    # Server converts to SLEEP 125 (frames) 
+
+PRESS y
+SLEEP 0.1    # Server converts to SLEEP 12.5 (frames)
+
+# Test ZL which was working before
+PRESS zl
+SLEEP 2.0    # Server converts to SLEEP 250 (frames)
