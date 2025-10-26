@@ -5,6 +5,7 @@ import re
 import time
 import serial
 from typing import Optional
+from math import ceil
 
 
 def flatten_press_commands(macro_content: str) -> str:
@@ -60,8 +61,9 @@ def convert_sleep_to_frames(macro_content: str) -> str:
             # Check if it's a float (contains decimal point)
             if '.' in value_str:
                 # Convert seconds to frames (multiply by 125 for 125 Hz)
+                # Round up to ensure minimum delay is met
                 seconds = float(value_str)
-                frames = int(seconds * 125)
+                frames = ceil(seconds * 125)
                 lines.append(f'{command} {frames}')
             else:
                 # Already in frames, keep as-is
@@ -69,6 +71,23 @@ def convert_sleep_to_frames(macro_content: str) -> str:
         else:
             # Keep line as-is
             lines.append(line)
+    
+    return '\n'.join(lines)
+
+
+def remove_comments_and_empty_lines(macro_content: str) -> str:
+    """
+    Remove all comments (lines starting with #) and empty lines from macro content.
+    This ensures only actual commands are sent to the firmware.
+    """
+    lines = []
+    
+    for line in macro_content.split('\n'):
+        stripped = line.strip()
+        
+        # Skip empty lines and comments
+        if stripped and not stripped.startswith('#'):
+            lines.append(stripped)
     
     return '\n'.join(lines)
 
@@ -176,30 +195,33 @@ class PicoDevice:
             # 2. Convert SLEEP from seconds to frames (if float)
             processed_content = convert_sleep_to_frames(processed_content)
             
-            # 3. Stop any running macro first (allow during upload)
+            # 3. Remove comments and empty lines
+            processed_content = remove_comments_and_empty_lines(processed_content)
+            
+            # 4. Stop any running macro first (allow during upload)
             self.send_command("STOP_MACRO", allow_during_upload=True)
             time.sleep(0.1)
             
-            # 4. Start macro loading sequence (allow during upload)
+            # 5. Start macro loading sequence (allow during upload)
             self.send_command("LOAD_MACRO_START", allow_during_upload=True)
             time.sleep(0.05)
             
-            # 5. Send macro content line by line (allow during upload)
+            # 6. Send macro content line by line (allow during upload)
             lines_sent = 0
             for line in processed_content.split('\n'):
                 line = line.strip()
-                if line:  # Send all non-empty lines (firmware filters comments)
+                if line:  # Send all non-empty lines (already filtered)
                     self.send_command(line, allow_during_upload=True)
                     lines_sent += 1
             
             print(f"[{self.name}] Sent {lines_sent} lines")
             time.sleep(0.05)
             
-            # 6. Complete the macro loading (allow during upload)
+            # 7. Complete the macro loading (allow during upload)
             self.send_command("LOAD_MACRO_END", allow_during_upload=True)
             time.sleep(0.2)  # Give firmware time to process
             
-            # 7. Read all responses to check for success
+            # 8. Read all responses to check for success
             responses = []
             while self.serial.in_waiting:
                 line = self.serial.readline().decode('utf-8', errors='ignore').strip()
