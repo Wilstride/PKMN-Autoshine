@@ -41,6 +41,9 @@ def setup_routes(app: web.Application) -> None:
     
     # Macro upload
     app.router.add_post('/api/upload', handlers.upload_macro)
+    
+    # Pairing control
+    app.router.add_post('/api/pico/pair', handlers.enable_pairing)
 
 
 async def poll_serial_buffers(pico_manager: PicoManager) -> None:

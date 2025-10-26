@@ -311,3 +311,32 @@ async def upload_macro(request: web.Request) -> web.Response:
         import traceback
         traceback.print_exc()
         return web.Response(status=500, text=str(e))
+
+
+# ===== Pairing Control Handler =====
+
+async def enable_pairing(request: web.Request) -> web.Response:
+    """Enable pairing mode on a specific Pico device."""
+    try:
+        data = await request.json()
+        target_port = data.get('port')
+        
+        if not target_port:
+            return web.Response(status=400, text='port required')
+        
+        device = pico_manager.get_device(target_port)
+        if not device or not device.connected:
+            return web.Response(status=503, text=f'Pico {target_port} not connected')
+        
+        # Send PAIR command to device
+        device.send_command('PAIR')
+        log_message(f"🔗 Pairing mode enabled on {device.name}", 'info')
+        
+        return web.json_response({
+            'status': 'ok',
+            'message': f'Pairing mode enabled on {device.name}',
+            'port': target_port
+        })
+    except Exception as e:
+        log_message(f"Pairing error: {e}", 'error')
+        return web.Response(status=500, text=str(e))

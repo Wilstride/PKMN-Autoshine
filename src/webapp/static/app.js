@@ -171,9 +171,19 @@ class AutoshineApp {
                         `<span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(device.current_macro)}</span>` : 
                         '<span style="color: var(--text-secondary);">Idle</span>'}
                 </div>
-                ${device.iteration_count > 0 ? 
-                    `<div style="color: var(--accent-primary); font-weight: 500; white-space: nowrap; margin-left: 0.5rem;">#${device.iteration_count}</div>` : 
-                    ''}
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    ${device.iteration_count > 0 ? 
+                        `<div style="color: var(--accent-primary); font-weight: 500; white-space: nowrap;">#${device.iteration_count}</div>` : 
+                        ''}
+                    <button 
+                        onclick="app.enablePairing('${this.escapeHtml(device.port)}')" 
+                        class="small secondary" 
+                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                        ${!device.connected ? 'disabled' : ''}
+                        title="Enable pairing mode on this device">
+                        🔗 Pair
+                    </button>
+                </div>
             </div>
         `).join('');
     }
@@ -470,6 +480,30 @@ class AutoshineApp {
             this.updateButtonStates();
         } catch (error) {
             this.log(`Error stopping macro: ${error.message}`, 'error');
+        }
+    }
+    
+    // ===== Pairing Control =====
+    
+    async enablePairing(port) {
+        try {
+            const device = this.devices.find(d => d.port === port);
+            const deviceName = device ? device.name : port;
+            
+            const response = await fetch('/api/pico/pair', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ port })
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to enable pairing mode');
+            }
+            
+            this.log(`🔗 Pairing mode enabled on ${deviceName}. Go to Switch Settings > Controllers > Change Grip/Order to pair.`, 'success');
+        } catch (error) {
+            this.log(`Error enabling pairing: ${error.message}`, 'error');
         }
     }
     
