@@ -120,7 +120,6 @@ class AutoshineApp {
             
             this.devices = await response.json();
             this.renderDevices();
-            this.updateDeviceSelect();
         } catch (error) {
             this.log(`Error loading devices: ${error.message}`, 'error');
         }
