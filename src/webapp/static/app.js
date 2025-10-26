@@ -211,7 +211,7 @@ class AutoshineApp {
             
             // API returns array of {name, size, modified} objects
             const macroObjects = await response.json();
-            this.macros = macroObjects.map(m => m.name);
+            this.macros = macroObjects.map(m => m.name).sort((a, b) => a.localeCompare(b));
             
             this.renderMacroList();
             this.log(`Loaded ${this.macros.length} macro(s)`, 'info');

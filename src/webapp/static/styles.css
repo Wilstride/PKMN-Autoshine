@@ -29,6 +29,7 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     overflow: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Main Layout */
@@ -417,13 +418,27 @@ textarea:focus {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    body {
+        overflow: auto;
+    }
+
+    .container {
+        height: auto;
+        min-height: 100vh;
+    }
+
     main {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
+        overflow: visible;
     }
 
     .sidebar {
         max-height: 300px;
+    }
+
+    .content {
+        overflow: visible;
     }
 
     .status-panel {
