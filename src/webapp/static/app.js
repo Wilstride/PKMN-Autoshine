@@ -1,732 +1,539 @@
 /**
- * PKMN Autoshine - Main Application JavaScript
+ * PKMN Autoshine - Clean Web UI Application
  * 
- * This module provides the complete frontend functionality for the macro automation
- * control interface. It handles WebSocket communication, macro management, editor
- * initialization, and user interface interactions.
- * 
- * Key Features:
- * - Real-time WebSocket communication with backend
- * - Advanced code editor with syntax highlighting (CodeMirror)
- * - Mobile-responsive design with fallback editor
- * - Macro file management (create, edit, save, run)
- * - Live status monitoring and metrics tracking
- * - Adapter management and connectivity testing
- * - Alert system with notifications and sound
- * - Comprehensive logging with spam filtering
+ * Simplified macro management interface without bloat.
+ * Features: WebSocket communication, macro CRUD, execution controls, live logging
  */
 
-// ============================================================================
-// Global Variables and State Management
-// ============================================================================
-
-let editor;
-let ws;
-let wsReconnectInterval;
-let currentMacroName = '';
-let alertIntervalUserModified = false;
-
-// Log management with spam filtering
-let logEntries = [];
-let lastLogMessage = '';
-let logRepeatCount = 0;
-let maxLogEntries = 20; // Default fallback
-const SPAM_MESSAGES = [
-  'Could not find Pico W device',
-  'No module named \'joycontrol\'',
-  'Could not connect to any adapter',
-  'Attempting to reconnect',
-  'WebSocket disconnected'
-];
-
-/**
- * Calculate the maximum number of log entries that can fit in the logs content area.
- * @returns {number} Maximum number of log entries that fit without growing the container
- */
-function calculateMaxLogEntries() {
-  const logContent = document.getElementById('log');
-  if (!logContent) return 20; // Fallback if element not found
-  
-  // Get computed styles
-  const styles = window.getComputedStyle(logContent);
-  const fontSize = parseFloat(styles.fontSize) || 13;
-  const lineHeight = parseFloat(styles.lineHeight) || (fontSize * 1.5);
-  
-  // Get available height (total height minus padding)
-  const paddingTop = parseFloat(styles.paddingTop) || 16;
-  const paddingBottom = parseFloat(styles.paddingBottom) || 16;
-  const availableHeight = logContent.clientHeight - paddingTop - paddingBottom;
-  
-  // Calculate how many lines can fit
-  const maxLines = Math.floor(availableHeight / lineHeight);
-  
-  // Ensure we have at least 5 lines and at most 50 lines
-  return Math.max(5, Math.min(50, maxLines));
-}
-
-// ============================================================================
-// Device Detection and Editor Utilities
-// ============================================================================
-
-/**
- * Detect if the current device is a mobile device.
- * @returns {boolean} True if mobile device detected
- */
-function isMobileDevice() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-         ('ontouchstart' in window) ||
-         (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
-}
-
-/**
- * Check if the fallback editor should be used instead of CodeMirror.
- * @returns {boolean} True if fallback editor should be used
- */
-function shouldUseFallback() {
-  // Check for problematic mobile browsers or user preference
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isProblematicBrowser = userAgent.includes('chrome') && userAgent.includes('mobile');
-  
-  // Check localStorage for user preference
-  const preferFallback = localStorage.getItem('useFallbackEditor') === 'true';
-  
-  return preferFallback || isProblematicBrowser;
-}
-
-// ============================================================================
-// Editor Initialization and Mobile Support
-// ============================================================================
-
-/**
- * Initialize fallback editor for mobile devices with limited CodeMirror support.
- */
-function initializeFallbackEditor() {
-  const wrapper = document.getElementById('editor-wrapper');
-  const fallbackEditor = document.getElementById('mobile-fallback-editor');
-  
-  wrapper.classList.add('use-fallback');
-  
-  // Add helpful placeholder for mobile users
-  fallbackEditor.placeholder = `Enter your macro commands here...
-
-Available commands:
-PRESS <button>     - Press a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
-STICK <stick> <x> <y> - Move analog stick (l or r, coordinates -1.0 to 1.0)
-SLEEP <seconds>    - Wait for specified time
-
-Example:
-PRESS a
-SLEEP 0.5
-STICK l 0.0 1.0
-SLEEP 0.1`;
-
-  // Set up fallback editor as the main editor interface
-  editor = {
-    getValue: function() {
-      return fallbackEditor.value;
-    },
-    setValue: function(value) {
-      fallbackEditor.value = value;
-    },
-    getWrapperElement: function() {
-      return fallbackEditor;
-    },
-    refresh: function() {
-      // No-op for regular textarea
-    },
-    focus: function() {
-      fallbackEditor.focus();
+class AutoshineApp {
+    constructor() {
+        // State
+        this.macros = [];
+        this.selectedMacro = null;
+        this.devices = [];
+        this.selectedDevice = null;  // null = all devices
+        this.ws = null;
+        this.isEditing = false;
+        this.editingMacro = null;
+        
+        // DOM elements
+        this.elements = {
+            macroList: document.getElementById('macroList'),
+            currentMacro: document.getElementById('currentMacro'),
+            picoCount: document.getElementById('picoCount'),
+            targetDevice: document.getElementById('targetDevice'),
+            picoDevices: document.getElementById('picoDevices'),
+            logsContainer: document.getElementById('logsContainer'),
+            editorModal: document.getElementById('editorModal'),
+            editorTitle: document.getElementById('editorTitle'),
+            macroName: document.getElementById('macroName'),
+            macroEditor: document.getElementById('macroEditor'),
+            uploadBtn: document.getElementById('uploadBtn'),
+            runBtn: document.getElementById('runBtn'),
+            stopBtn: document.getElementById('stopBtn'),
+            editBtn: document.getElementById('editBtn'),
+            deleteBtn: document.getElementById('deleteBtn')
+        };
+        
+        // Listen for target device changes
+        this.elements.targetDevice.addEventListener('change', (e) => {
+            this.selectedDevice = e.target.value || null;
+            this.log(`Target: ${this.selectedDevice ? this.selectedDevice : 'All devices'}`, 'info');
+        });
+        
+        // Initialize
+        this.init();
     }
-  };
-
-  // Add a button to switch back to CodeMirror if desired
-  const switchButton = document.createElement('button');
-  switchButton.textContent = '🔄 Try Advanced Editor';
-  switchButton.style.cssText = `
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: var(--accent-primary);
-    color: white;
-    border: none;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    z-index: 1000;
-  `;
-  
-  wrapper.style.position = 'relative';
-  wrapper.appendChild(switchButton);
-  
-  switchButton.onclick = function() {
-    localStorage.setItem('useFallbackEditor', 'false');
-    location.reload();
-  };
-
-  addLogMessage('📱 Using mobile-optimized editor', 'info');
-}
-
-/**
- * Initialize CodeMirror editor with custom syntax highlighting and mobile support.
- */
-function initializeEditor() {
-  // Check if we should use the mobile fallback
-  if (isMobileDevice() && shouldUseFallback()) {
-    initializeFallbackEditor();
-    return;
-  }
-
-  // Define custom mode for macro syntax
-  CodeMirror.defineMode("macro", function() {
-    return {
-      token: function(stream, state) {
-        // Comments
-        if (stream.match(/^#.*/)) {
-          return "comment";
-        }
-        
-        // Commands
-        if (stream.match(/^(PRESS|STICK|SLEEP)\b/)) {
-          return "keyword";
-        }
-        
-        // Button names
-        if (stream.match(/\\b(a|b|x|y|l|r|zl|zr|plus|minus|home|capture|ls|rs)\\b/)) {
-          return "atom";
-        }
-        
-        // Numbers (coordinates, time values)
-        if (stream.match(/[-+]?\\d*\\.?\\d+/)) {
-          return "number";
-        }
-        
-        // Strings
-        if (stream.match(/^"([^"\\\\]|\\\\.)*"/)) {
-          return "string";
-        }
-        
-        stream.next();
-        return null;
-      }
-    };
-  });
-
-  // Use different input methods for mobile vs desktop
-  const isMobile = isMobileDevice();
-  const editorConfig = {
-    mode: 'macro',
-    theme: 'dracula',
-    lineNumbers: true,
-    indentUnit: 2,
-    lineWrapping: true,
-    autoCloseBrackets: true,
-    matchBrackets: true,
-    showCursorWhenSelecting: true,
-    tabSize: 2,
-    extraKeys: {
-      "Ctrl-S": function() { saveMacro(); },
-      "Cmd-S": function() { saveMacro(); }
+    
+    async init() {
+        this.log('Initializing application...', 'info');
+        await this.loadMacros();
+        await this.loadDevices();
+        this.connectWebSocket();
+        this.setupKeyboardShortcuts();
     }
-  };
-
-  // Add mobile-specific configuration
-  if (isMobile) {
-    editorConfig.inputStyle = "textarea";  // Use textarea input for better mobile support
-    editorConfig.spellcheck = false;
-    editorConfig.autocorrect = false;
-    editorConfig.autocapitalize = false;
-    editorConfig.lineWiseCopyCut = false;
-    editorConfig.undoDepth = 200;
-  } else {
-    editorConfig.inputStyle = "contenteditable";
-    // Add desktop backspace handler
-    editorConfig.extraKeys["Backspace"] = function(cm) {
-      const cursor = cm.getCursor();
-      if (cursor.ch === 0 && cursor.line > 0) {
-        const prevLine = cm.getLine(cursor.line - 1);
-        const prevLineEnd = prevLine.length;
-        cm.replaceRange("", 
-          {line: cursor.line - 1, ch: prevLineEnd}, 
-          {line: cursor.line, ch: 0}
-        );
-      } else {
-        return CodeMirror.Pass;
-      }
-    };
-  }
-
-  editor = CodeMirror.fromTextArea(document.getElementById('macro_editor'), editorConfig);
-
-  // Setup mobile support function
-  function setupMobileSupport(cm) {
-    let lastContent = cm.getValue();
-    let isHandlingInput = false;
-
-    // Handle virtual keyboard changes on mobile
-    cm.on('focus', function() {
-      setTimeout(() => {
-        if (window.visualViewport) {
-          const handleViewportChange = () => {
-            const editorElement = cm.getWrapperElement();
-            const rect = editorElement.getBoundingClientRect();
-            if (rect.bottom > window.visualViewport.height) {
-              editorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // ===== WebSocket Management =====
+    
+    connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        this.log(`Connecting to ${wsUrl}...`, 'info');
+        
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            this.log('✓ Connected to server', 'success');
+        };
+        
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'log') {
+                    this.log(data.message, data.level || 'info');
+                } else if (data.type === 'status') {
+                    this.log(data.message || 'Status update');
+                }
+            } catch (e) {
+                this.log(event.data);
             }
-          };
-          window.visualViewport.addEventListener('resize', handleViewportChange);
-        }
-      }, 100);
-    });
-
-    // Monitor content changes for backspace detection
-    cm.on('beforeChange', function(cm, changeObj) {
-      if (isHandlingInput) return;
-      
-      const cursor = cm.getCursor();
-      const currentContent = cm.getValue();
-      
-      // Check if this is a backspace operation at line beginning
-      if (changeObj.origin === '+delete' && 
-          changeObj.from.line > 0 && 
-          changeObj.from.ch === 0 && 
-          changeObj.to.ch === 0) {
+        };
         
-        isHandlingInput = true;
-        changeObj.cancel();
+        this.ws.onerror = (error) => {
+            this.log('WebSocket error', 'error');
+        };
         
-        // Manually handle line merging
-        setTimeout(() => {
-          const prevLine = cm.getLine(changeObj.from.line - 1);
-          const currentLine = cm.getLine(changeObj.from.line);
-          const prevLineEnd = prevLine.length;
-          
-          // Replace the newline with nothing, merging the lines
-          cm.replaceRange(currentLine, 
-            {line: changeObj.from.line - 1, ch: prevLineEnd}, 
-            {line: changeObj.from.line + 1, ch: 0}
-          );
-          
-          // Set cursor position at the merge point
-          cm.setCursor({line: changeObj.from.line - 1, ch: prevLineEnd});
-          
-          isHandlingInput = false;
-        }, 0);
-      }
-    });
-
-    // Direct input monitoring as fallback
-    const textarea = cm.getInputField();
-    if (textarea) {
-      textarea.addEventListener('input', function(e) {
-        if (isHandlingInput) return;
-        
-        setTimeout(() => {
-          const newContent = cm.getValue();
-          const cursor = cm.getCursor();
-          
-          // Detect if lines were merged (content got shorter and we're at start of line)
-          if (newContent.length < lastContent.length && cursor.ch === 0 && cursor.line > 0) {
-            const lines = newContent.split('\\n');
-            const lastLines = lastContent.split('\\n');
+        this.ws.onclose = () => {
+            this.log('⚠ Disconnected from server. Reconnecting in 3s...', 'warning');
+            setTimeout(() => this.connectWebSocket(), 3000);
+        };
+    }
+    
+    async checkPicoStatus() {
+        try {
+            const response = await fetch('/api/pico/devices');
+            if (!response.ok) throw new Error('Failed to get devices');
             
-            // If we lost a line, it might be a backspace at line start
-            if (lines.length < lastLines.length) {
-              cm.refresh();
+            this.devices = await response.json();
+            this.renderDevices();
+            this.updateDeviceSelect();
+        } catch (error) {
+            this.log(`Error loading devices: ${error.message}`, 'error');
+        }
+    }
+    
+    async loadDevices() {
+        await this.checkPicoStatus();
+    }
+    
+    async refreshDevices() {
+        try {
+            const response = await fetch('/api/pico/refresh', { method: 'POST' });
+            if (!response.ok) throw new Error('Failed to refresh devices');
+            
+            const data = await response.json();
+            this.devices = data.devices;
+            this.renderDevices();
+            this.updateDeviceSelect();
+            
+            if (data.new_connections > 0) {
+                this.log(`✓ Found ${data.new_connections} new device(s)`, 'success');
+            } else {
+                this.log('No new devices found', 'info');
             }
-          }
-          
-          lastContent = newContent;
-        }, 0);
-      });
-
-      // Handle keydown events directly on the textarea
-      textarea.addEventListener('keydown', function(e) {
-        if (e.key === 'Backspace' || e.keyCode === 8) {
-          const cursor = cm.getCursor();
-          
-          // If at the beginning of a line
-          if (cursor.ch === 0 && cursor.line > 0) {
-            e.preventDefault();
-            isHandlingInput = true;
-            
-            const prevLine = cm.getLine(cursor.line - 1);
-            const currentLine = cm.getLine(cursor.line);
-            const prevLineEnd = prevLine.length;
-            
-            // Merge lines
-            cm.replaceRange(prevLine + currentLine, 
-              {line: cursor.line - 1, ch: 0}, 
-              {line: cursor.line + 1, ch: 0}
-            );
-            
-            // Position cursor at merge point
-            cm.setCursor({line: cursor.line - 1, ch: prevLineEnd});
-            
-            setTimeout(() => {
-              isHandlingInput = false;
-              cm.refresh();
-            }, 10);
-          }
+        } catch (error) {
+            this.log(`Error refreshing devices: ${error.message}`, 'error');
         }
-      });
     }
+    
+    renderDevices() {
+        this.elements.picoCount.textContent = this.devices.length;
+        
+        if (this.devices.length === 0) {
+            this.elements.picoDevices.innerHTML = `
+                <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">
+                    No devices connected. Click refresh to scan.
+                </div>
+            `;
+            return;
+        }
+        
+        this.elements.picoDevices.innerHTML = this.devices.map(device => `
+            <div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: 500; color: var(--accent-primary);">${this.escapeHtml(device.name)}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">${this.escapeHtml(device.port)}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        ${device.connected ? 
+                            '<span style="color: var(--success); font-size: 0.8rem;">● Connected</span>' : 
+                            '<span style="color: var(--danger); font-size: 0.8rem;">● Disconnected</span>'}
+                    </div>
+                </div>
+                ${device.current_macro ? 
+                    `<div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Running: ${this.escapeHtml(device.current_macro)}</div>` : 
+                    ''}
+            </div>
+        `).join('');
+    }
+    
+    updateDeviceSelect() {
+        const currentValue = this.elements.targetDevice.value;
+        
+        this.elements.targetDevice.innerHTML = '<option value="">All Devices</option>' + 
+            this.devices.map(device => 
+                `<option value="${this.escapeHtml(device.port)}">${this.escapeHtml(device.name)} (${this.escapeHtml(device.port)})</option>`
+            ).join('');
+        
+        // Restore previous selection if it still exists
+        if (currentValue) {
+            const exists = this.devices.some(d => d.port === currentValue);
+            if (exists) {
+                this.elements.targetDevice.value = currentValue;
+            }
+        }
+    }
+    
+    handleWebSocketMessage(data) {
+        // Simplified - just handle logs
+        if (data.type === 'log') {
+            this.log(data.message, data.level || 'info');
+        }
+    }
+    
+    // ===== Macro Management =====
+    
+    async loadMacros() {
+        try {
+            const response = await fetch('/api/macros');
+            if (!response.ok) throw new Error('Failed to load macros');
+            
+            // API returns array of {name, size, modified} objects
+            const macroObjects = await response.json();
+            this.macros = macroObjects.map(m => m.name);
+            
+            this.renderMacroList();
+            this.log(`Loaded ${this.macros.length} macro(s)`, 'info');
+        } catch (error) {
+            this.log(`Error loading macros: ${error.message}`, 'error');
+            this.macros = [];
+            this.renderMacroList();
+        }
+    }
+    
+    renderMacroList() {
+        if (this.macros.length === 0) {
+            this.elements.macroList.innerHTML = `
+                <div class="macro-item" style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                    No macros found. Click "New" to create one.
+                </div>
+            `;
+            return;
+        }
+        
+        this.elements.macroList.innerHTML = this.macros.map(name => `
+            <div class="macro-item ${this.selectedMacro === name ? 'selected' : ''}" 
+                 onclick="app.selectMacro('${name.replace(/'/g, "\\'")}')">
+                ${this.escapeHtml(name)}
+            </div>
+        `).join('');
+    }
+    
+    selectMacro(name) {
+        this.selectedMacro = name;
+        this.renderMacroList();
+        this.updateButtonStates();
+        this.elements.currentMacro.textContent = name;
+        this.log(`Selected macro: ${name}`, 'info');
+    }
+    
+    async newMacro() {
+        this.isEditing = true;
+        this.editingMacro = null;
+        this.elements.editorTitle.textContent = 'New Macro';
+        this.elements.macroName.value = '';
+        this.elements.macroEditor.value = '';
+        this.elements.editorModal.classList.add('active');
+        this.elements.macroName.focus();
+    }
+    
+    async editMacro() {
+        if (!this.selectedMacro) {
+            this.log('No macro selected', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/macros/${encodeURIComponent(this.selectedMacro)}`);
+            if (!response.ok) throw new Error('Failed to load macro content');
+            
+            const content = await response.text();
+            
+            this.isEditing = true;
+            this.editingMacro = this.selectedMacro;
+            this.elements.editorTitle.textContent = 'Edit Macro';
+            this.elements.macroName.value = this.selectedMacro;
+            this.elements.macroEditor.value = content;
+            this.elements.editorModal.classList.add('active');
+            this.elements.macroEditor.focus();
+        } catch (error) {
+            this.log(`Error loading macro: ${error.message}`, 'error');
+        }
+    }
+    
+    async saveMacro() {
+        const name = this.elements.macroName.value.trim();
+        const content = this.elements.macroEditor.value;
+        
+        if (!name) {
+            this.log('Filename cannot be empty', 'warning');
+            this.elements.macroName.focus();
+            return;
+        }
+        
+        try {
+            let response;
+            
+            if (this.editingMacro) {
+                // Update existing macro
+                response = await fetch(`/api/macros/${encodeURIComponent(this.editingMacro)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+            } else {
+                // Create new macro
+                response = await fetch('/api/macros', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, content })
+                });
+            }
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to save macro');
+            }
+            
+            this.log(`✓ Saved macro: ${name}`, 'success');
+            this.closeEditor();
+            await this.loadMacros();
+            this.selectMacro(name);
+        } catch (error) {
+            this.log(`Error saving macro: ${error.message}`, 'error');
+        }
+    }
+    
+    async deleteMacro() {
+        if (!this.selectedMacro) {
+            this.log('No macro selected', 'warning');
+            return;
+        }
+        
+        if (!confirm(`Delete macro "${this.selectedMacro}"?`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/macros/${encodeURIComponent(this.selectedMacro)}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to delete macro');
+            }
+            
+            this.log(`✓ Deleted macro: ${this.selectedMacro}`, 'success');
+            this.selectedMacro = null;
+            await this.loadMacros();
+            this.updateButtonStates();
+        } catch (error) {
+            this.log(`Error deleting macro: ${error.message}`, 'error');
+        }
+    }
+    
+    closeEditor() {
+        this.elements.editorModal.classList.remove('active');
+        this.isEditing = false;
+        this.editingMacro = null;
+    }
+    
+    // ===== Macro Execution Controls =====
+    
+    async uploadMacro() {
+        if (!this.selectedMacro) {
+            this.log('No macro selected', 'warning');
+            return;
+        }
+        
+        if (this.devices.length === 0) {
+            this.log('No Pico devices connected', 'warning');
+            return;
+        }
+        
+        try {
+            const body = {
+                name: this.selectedMacro
+            };
+            
+            // Add port if targeting specific device
+            if (this.selectedDevice) {
+                body.port = this.selectedDevice;
+            }
+            
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error);
+            }
+            
+            const target = this.selectedDevice ? 
+                this.devices.find(d => d.port === this.selectedDevice)?.name || this.selectedDevice :
+                'all devices';
+            
+            this.log(`📤 Uploaded '${this.selectedMacro}' to ${target}`, 'success');
+            
+            // Refresh device status to show current macro
+            setTimeout(() => this.loadDevices(), 500);
+            
+            this.updateButtonStates();
+        } catch (error) {
+            this.log(`Error uploading macro: ${error.message}`, 'error');
+        }
+    }
+    
+    async runMacro() {
+        if (!this.selectedMacro) {
+            this.log('No macro selected', 'warning');
+            return;
+        }
+        
+        if (this.devices.length === 0) {
+            this.log('No Pico devices connected', 'warning');
+            return;
+        }
+        
+        try {
+            // Send START_MACRO command to run continuously
+            const body = {
+                command: 'START_MACRO'
+            };
+            
+            if (this.selectedDevice) {
+                body.port = this.selectedDevice;
+            }
+            
+            // Send via WebSocket for real-time execution
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(body));
+            }
+            
+            const target = this.selectedDevice ? 
+                this.devices.find(d => d.port === this.selectedDevice)?.name || this.selectedDevice :
+                'all devices';
+            
+            this.log(`▶️ Running macro on ${target} (continuous)`, 'success');
+            
+            this.updateButtonStates();
+        } catch (error) {
+            this.log(`Error running macro: ${error.message}`, 'error');
+        }
+    }
+    
+    async stopMacro() {
+        try {
+            const body = {
+                command: 'STOP_MACRO'
+            };
+            
+            if (this.selectedDevice) {
+                body.port = this.selectedDevice;
+            }
+            
+            // Send via WebSocket
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(body));
+            }
+            
+            const target = this.selectedDevice ? 
+                this.devices.find(d => d.port === this.selectedDevice)?.name || this.selectedDevice :
+                'all devices';
+            
+            this.log(`⏹️ Stopped macro on ${target}`, 'info');
+            
+            this.updateButtonStates();
+        } catch (error) {
+            this.log(`Error stopping macro: ${error.message}`, 'error');
+        }
+    }
+    
+    // ===== Logging =====
+    
+    log(message, level = 'default') {
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${level}`;
+        entry.textContent = `[${timestamp}] ${message}`;
+        
+        this.elements.logsContainer.appendChild(entry);
+        
+        // Auto-scroll to bottom
+        this.elements.logsContainer.scrollTop = this.elements.logsContainer.scrollHeight;
+        
+        // Limit log entries to prevent memory issues
+        const maxLogs = 500;
+        while (this.elements.logsContainer.children.length > maxLogs) {
+            this.elements.logsContainer.removeChild(this.elements.logsContainer.firstChild);
+        }
+    }
+    
+    clearLogs() {
+        this.elements.logsContainer.innerHTML = '';
+        this.log('Logs cleared', 'info');
+    }
+    
+    // ===== Utilities =====
+    
+    updateButtonStates() {
+        const hasSelection = this.selectedMacro !== null;
+        const hasDevices = this.devices.length > 0;
+        
+        this.elements.editBtn.disabled = !hasSelection;
+        this.elements.deleteBtn.disabled = !hasSelection;
+        this.elements.uploadBtn.disabled = !hasSelection || !hasDevices;
+        this.elements.runBtn.disabled = !hasSelection || !hasDevices;
+        this.elements.stopBtn.disabled = !hasDevices;
+    }
+    
+    formatTime(seconds) {
+        if (seconds < 0) return '0:00';
+        
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+        
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        } else {
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+S or Cmd+S to save in editor
+            if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.isEditing) {
+                e.preventDefault();
+                this.saveMacro();
+            }
+            
+            // Escape to close editor
+            if (e.key === 'Escape' && this.isEditing) {
+                this.closeEditor();
+            }
+        });
+    }
+}
 
-    // Handle orientation changes
-    window.addEventListener('orientationchange', () => {
-      setTimeout(() => {
-        cm.refresh();
-      }, 200);
+// Initialize app when DOM is ready
+let app;
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        app = new AutoshineApp();
     });
-
-    // Force periodic refresh on mobile
-    setInterval(() => {
-      if (document.activeElement === textarea) {
-        cm.refresh();
-      }
-    }, 1000);
-  }
-
-  // Add custom CSS for macro syntax highlighting
-  const style = document.createElement('style');
-  style.textContent = `
-    .cm-s-dracula .cm-keyword { color: #ff79c6; font-weight: bold; }
-    .cm-s-dracula .cm-atom { color: #8be9fd; }
-    .cm-s-dracula .cm-number { color: #bd93f9; }
-    .cm-s-dracula .cm-comment { color: #6272a4; font-style: italic; }
-  `;
-  document.head.appendChild(style);
-
-  // Add mobile-specific event handling
-  if (isMobileDevice()) {
-    setupMobileSupport(editor);
-    
-    // Additional fallback: mutation observer for content changes
-    const wrapper = editor.getWrapperElement();
-    const observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          // Force a refresh after DOM changes
-          setTimeout(() => editor.refresh(), 10);
-        }
-      });
-    });
-    
-    observer.observe(wrapper, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    });
-
-    // Detect persistent backspace issues and offer fallback
-    let backspaceProblemCount = 0;
-    const textarea = editor.getInputField();
-    
-    if (textarea) {
-      textarea.addEventListener('keydown', function(e) {
-        if (e.key === 'Backspace' && editor.getCursor().ch === 0 && editor.getCursor().line > 0) {
-          backspaceProblemCount++;
-          
-          if (backspaceProblemCount >= 3) {
-            setTimeout(() => {
-              if (confirm('Having trouble with backspace? Switch to mobile-optimized editor?')) {
-                localStorage.setItem('useFallbackEditor', 'true');
-                location.reload();
-              }
-            }, 500);
-          }
-        }
-      });
-    }
-  }
+} else {
+    app = new AutoshineApp();
 }
-
-// ============================================================================
-// WebSocket Communication
-// ============================================================================
-
-/**
- * Initialize WebSocket connection with automatic reconnection.
- */
-function connectWebSocket() {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
-  
-  const wsIndicator = document.getElementById('ws-indicator');
-  const wsStatus = document.getElementById('ws-status');
-  
-  ws.onopen = () => {
-    console.log('WebSocket connected');
-    if (wsIndicator) wsIndicator.classList.add('connected');
-    if (wsStatus) wsStatus.textContent = 'Connected';
-    clearInterval(wsReconnectInterval);
-    addLogMessage('🟢 Connected to server', 'success');
-  };
-
-  ws.onclose = () => {
-    console.log('WebSocket disconnected');
-    if (wsIndicator) wsIndicator.classList.remove('connected');
-    if (wsStatus) wsStatus.textContent = 'Disconnected';
-    addLogMessage('🔴 Disconnected from server', 'error');
-    
-    // Auto-reconnect
-    wsReconnectInterval = setInterval(() => {
-      addLogMessage('🔄 Attempting to reconnect...', 'info');
-      connectWebSocket();
-    }, 5000);
-  };
-
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-    addLogMessage('❌ Connection error', 'error');
-  };
-
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      handleWebSocketMessage(msg);
-    } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
-    }
-  };
-}
-
-/**
- * Handle incoming WebSocket messages.
- * @param {Object} msg - The parsed WebSocket message
- */
-function handleWebSocketMessage(msg) {
-  if (msg.type === 'log') {
-    addLogMessage(msg.message || msg.msg, msg.level || 'info');
-  } else if (msg.type === 'status') {
-    updateStatus(msg);
-  } else if (msg.type === 'alert') {
-    showAlert(msg.iterations);
-  }
-}
-
-// ============================================================================
-// Status Management and Real-time Updates
-// ============================================================================
-
-/**
- * Update macro execution status from server.
- */
-async function updateMacroDetails() {
-  try {
-    const res = await fetch('/api/status');
-    if (!res.ok) return;
-    
-    const status = await res.json();
-    
-    // Update individual status fields
-    const iterationElement = document.getElementById('iteration_count');
-    const runtimeElement = document.getElementById('runtime_display');
-    const timePerIterElement = document.getElementById('time_per_iteration');
-    
-    if (iterationElement) iterationElement.textContent = status.iterations || 0;
-    if (runtimeElement) runtimeElement.textContent = status.runtime || '0:00';
-    if (timePerIterElement) timePerIterElement.textContent = status.sec_per_iter ? status.sec_per_iter + 's' : '--';
-    
-    // Check for pending alert
-    if (status.pending_alert && status.iterations > 0) {
-      showAlert(status.iterations);
-    }
-    
-    // Update alert interval UI if it changed (but don't overwrite if user has modified it)
-    if (status.alert_interval !== undefined && !alertIntervalUserModified) {
-      const alertInput = document.getElementById('alert_interval');
-      // Only update if the input is not currently focused
-      if (alertInput && document.activeElement !== alertInput) {
-        alertInput.value = status.alert_interval;
-      }
-    }
-  } catch (error) {
-    console.error('Failed to update macro details:', error);
-  }
-}
-
-/**
- * Update adapter connectivity status.
- */
-async function updateAdapterStatus() {
-  try {
-    const res = await fetch('/api/adapters/status');
-    if (!res.ok) return;
-    
-    const status = await res.json();
-    const preferred = status.preferred || 'auto-detect';
-    const connectivity = status.connectivity || {};
-    
-    const statusLines = [
-      `🔌 Adapter: ${preferred}`,
-      `${connectivity.pico ? '✅' : '❌'} Pico W: ${connectivity.pico ? 'Available' : 'Unavailable'}`,
-      `${connectivity.joycontrol ? '✅' : '❌'} Joycontrol: ${connectivity.joycontrol ? 'Available' : 'Unavailable'}`
-    ];
-    
-    const adapterStatusElement = document.getElementById('adapter_status');
-    const adapterSelectElement = document.getElementById('adapter_select');
-    
-    if (adapterStatusElement) adapterStatusElement.textContent = statusLines.join('\\n');
-    if (adapterSelectElement) adapterSelectElement.value = status.preferred || '';
-    
-    // Update status card styling
-    const adapterCard = adapterStatusElement?.closest('.status-card');
-    if (adapterCard) {
-      if (connectivity.pico || connectivity.joycontrol) {
-        adapterCard.classList.remove('error');
-        adapterCard.classList.add('success');
-      } else {
-        adapterCard.classList.remove('success');
-        adapterCard.classList.add('error');
-      }
-    }
-  } catch (error) {
-    console.error('Failed to update adapter status:', error);
-  }
-}
-
-/**
- * Update status display from WebSocket or API data.
- * @param {Object|string} data - Status data or string message
- */
-function updateStatus(data) {
-  // Handle both old string format and new structured data
-  if (typeof data === 'string') {
-    const macroStatusElement = document.getElementById('macro_status');
-    if (macroStatusElement) macroStatusElement.textContent = data;
-    return;
-  }
-  
-  // Update iteration counter, runtime and time per iteration in main display
-  if (data.iterations !== undefined) {
-    const element = document.getElementById('iteration_count');
-    if (element) element.textContent = data.iterations;
-  }
-  if (data.runtime) {
-    const element = document.getElementById('runtime_display');
-    if (element) element.textContent = data.runtime;
-  }
-  if (data.sec_per_iter !== undefined) {
-    const element = document.getElementById('time_per_iteration');
-    if (element) element.textContent = data.sec_per_iter ? data.sec_per_iter + 's' : '--';
-  }
-  
-  // Update console status with MAC address if available (in settings)
-  const consoleStatusElement = document.getElementById('console_status');
-  if (consoleStatusElement) {
-    if (data.console_mac) {
-      consoleStatusElement.textContent = `${data.console_type || 'Switch'} (${data.console_mac})`;
-    } else if (data.adapter_name) {
-      consoleStatusElement.textContent = data.adapter_name + ' - No console connected';
-    } else {
-      consoleStatusElement.textContent = 'No adapter connected';
-    }
-  }
-  
-  // Update macro status (in settings)
-  if (data.status) {
-    const macroStatusElement = document.getElementById('macro_status');
-    if (macroStatusElement) macroStatusElement.textContent = data.status;
-  }
-  
-  // Update adapter status in settings
-  if (data.adapter_name) {
-    const adapterStatusElement = document.getElementById('adapter_status');
-    if (adapterStatusElement) adapterStatusElement.textContent = data.adapter_name;
-  }
-}
-
-// ============================================================================
-// Logging System with Spam Filtering
-// ============================================================================
-
-/**
- * Check if a log message should be filtered as spam.
- * @param {string} message - The log message to check
- * @returns {boolean} True if message is spam
- */
-function isSpamMessage(message) {
-  return SPAM_MESSAGES.some(spam => message.includes(spam));
-}
-
-/**
- * Add a log message to the display with spam filtering.
- * @param {string} message - The log message
- * @param {string} type - Message type ('info', 'success', 'warning', 'error')
- */
-function addLogMessage(message, type = 'info') {
-  // Filter out spam messages after first occurrence
-  if (isSpamMessage(message)) {
-    if (message === lastLogMessage) {
-      logRepeatCount++;
-      // Only show repeated spam messages every 10th occurrence
-      if (logRepeatCount % 10 !== 0) {
-        return;
-      }
-      message = `${message} (repeated ${logRepeatCount} times)`;
-    } else {
-      logRepeatCount = 1;
-    }
-  } else {
-    logRepeatCount = 0;
-  }
-  
-  lastLogMessage = message;
-  
-  const timestamp = new Date().toLocaleTimeString();
-  const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'info' ? 'ℹ️' : type === 'warning' ? '⚠️' : '📝';
-  const logEntry = `[${timestamp}] ${prefix} ${message}`;
-  
-  logEntries.push(logEntry);
-  
-  // Calculate current max entries and keep only the latest entries that fit
-  maxLogEntries = calculateMaxLogEntries();
-  if (logEntries.length > maxLogEntries) {
-    logEntries = logEntries.slice(-maxLogEntries);
-  }
-  
-  // Update display
-  const logContent = document.getElementById('log');
-  if (logContent) {
-    logContent.textContent = logEntries.join('\n');
-  }
-}
-
-/**
- * Clear all log entries.
- */
-function clearLog() {
-  logEntries = [];
-  const logContent = document.getElementById('log');
-  if (logContent) logContent.textContent = '';
-  addLogMessage('Log cleared');
-}
-
-// Initialize log capacity calculation when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-  // Initial calculation
-  maxLogEntries = calculateMaxLogEntries();
-  
-  // Recalculate on window resize with debouncing
-  let resizeTimeout;
-  window.addEventListener('resize', function() {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(function() {
-      const newMaxEntries = calculateMaxLogEntries();
-      if (newMaxEntries !== maxLogEntries) {
-        maxLogEntries = newMaxEntries;
-        // Trim log entries if needed
-        if (logEntries.length > maxLogEntries) {
-          logEntries = logEntries.slice(-maxLogEntries);
-          const logContent = document.getElementById('log');
-          if (logContent) {
-            logContent.textContent = logEntries.join('\n');
-          }
-        }
-      }
-    }, 250); // 250ms debounce
-  });
-});
-
-// Continue in next part due to length...

@@ -1,211 +1,125 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PKMN Autoshine - Macro Control</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/shell/shell.min.js"></script>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKMN Autoshine - Macro Manager</title>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <div class="header-left">
-        <h1><i class="fas fa-gamepad"></i> PKMN Autoshine</h1>
-        <p class="subtitle">Advanced Pokémon Macro Automation Control</p>
-      </div>
-      <div class="header-right">
-        <button id="settings-toggle" class="settings-btn" title="Settings">
-          <i class="fas fa-cog"></i>
-        </button>
-      </div>
-    </header>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🎮 PKMN Autoshine - Macro Manager</h1>
+        </header>
 
-    <!-- Macro Status Section -->
-    <div class="card macro-status-panel">
-      <h2><i class="fas fa-chart-line"></i> Macro Status</h2>
-      <div class="status-section">
-        <div class="status-item">
-          <span class="status-label">Iteration:</span>
-          <span class="status-value" id="iteration_count">0</span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Runtime:</span>
-          <span class="status-value" id="runtime_display">0:00</span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">Time/Iteration:</span>
-          <span class="status-value" id="time_per_iteration">--</span>
-        </div>
-      </div>
-    </div>
+        <!-- Main Content -->
+        <main>
+            <!-- Sidebar: Macro List -->
+            <aside class="sidebar">
+                <div class="macro-list-panel">
+                    <h2>Macros</h2>
+                    <div class="macro-list" id="macroList">
+                        <div class="macro-item" style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                            No macros found
+                        </div>
+                    </div>
+                    <div class="macro-actions">
+                        <button onclick="app.newMacro()" class="success">➕ New</button>
+                        <button onclick="app.editMacro()" id="editBtn" disabled>✏️ Edit</button>
+                    </div>
+                    <button onclick="app.deleteMacro()" id="deleteBtn" class="danger" disabled>🗑️ Delete</button>
+                </div>
+            </aside>
 
-    <!-- Macro Controls Section -->
-    <div class="card macro-control-panel">
-      <h2><i class="fas fa-play-circle"></i> Macro Controls</h2>
-      
-      <!-- Macro Selection -->
-      <div class="controls-section">
-        <div class="macro-selector">
-          <div class="form-group">
-            <select id="macro_select">
-              <option value="">Choose a macro...</option>
-            </select>
-          </div>
-        </div>
-        <div class="macro-actions">
-          <button id="run_macro" class="success"><i class="fas fa-rocket"></i> Run</button>
-          <button id="run_once" class="primary"><i class="fas fa-play"></i> Run Once</button>
-          <button id="pause" class="warning"><i class="fas fa-pause"></i> Pause</button>
-          <button id="force_stop" class="danger"><i class="fas fa-stop-circle"></i> Force Stop</button>
-          <button id="edit_macro" class="secondary"><i class="fas fa-edit"></i> Edit</button>
-          <button id="new_macro" class="secondary"><i class="fas fa-plus"></i> New</button>
-        </div>
-      </div>
+            <!-- Main Content: Status, Controls, Logs -->
+            <div class="content">
+                <!--Status Panel -->
+                <section class="panel status-panel">
+                    <div class="status-item">
+                        <div class="status-label">Selected Macro</div>
+                        <div class="status-value" id="currentMacro">—</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">Connected Picos</div>
+                        <div class="status-value" id="picoCount">0</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">Target Device</div>
+                        <div class="status-value">
+                            <select id="targetDevice" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.25rem; border-radius: 4px;">
+                                <option value="">All Devices</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
 
-    </div>
+                <!-- Pico Devices Panel -->
+                <section class="panel">
+                    <h2 style="font-size: 1.125rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>🎮 Connected Picos</span>
+                        <button onclick="app.refreshDevices()" class="small secondary">🔄 Refresh</button>
+                    </h2>
+                    <div id="picoDevices" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">
+                            No devices connected
+                        </div>
+                    </div>
+                </section>
 
-    <!-- Live Logs -->
-    <div class="card logs-panel">
-      <div class="logs-header">
-        <h2><i class="fas fa-terminal"></i> Live Logs</h2>
-        <button id="clear-log" class="btn-small"><i class="fas fa-trash"></i> Clear</button>
-      </div>
-      <div class="logs-content" id="log">Waiting for connection...</div>
-    </div>
-  </div>
-  <!-- External JavaScript modules -->
-  <script src="/static/app.js"></script>
-  <script src="/static/app-functions.js"></script>
+                <!-- Controls Panel -->
+                <section class="panel controls-panel">
+                    <button onclick="app.uploadMacro()" id="uploadBtn" class="primary" disabled>
+                        📤 Upload
+                    </button>
+                    <button onclick="app.runMacro()" id="runBtn" class="success" disabled>
+                        ▶️ Run
+                    </button>
+                    <button onclick="app.stopMacro()" id="stopBtn" class="danger" disabled>
+                        ⏹️ Stop
+                    </button>
+                    <button onclick="app.checkPicoStatus()" class="secondary">
+                        🔄 Refresh Status
+                    </button>
+                </section>
 
-  <!-- Macro Editor Modal -->
-  <div id="macro-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modal-title"><i class="fas fa-code"></i> Edit Macro</h2>
-        <button class="modal-close" id="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="macro_name">Filename:</label>
-          <input id="macro_name" type="text" placeholder="Enter filename.txt" style="width: 100%;">
-        </div>
-        <div id="editor-wrapper">
-          <textarea id="macro_editor" placeholder="# Enter your macro commands here...
-# Available commands:
-# PRESS <button>     - Press and release a button (a, b, x, y, l, r, zl, zr, plus, minus, home, capture)
-# HOLD <button>      - Hold a button down (without releasing)
-# RELEASE <button>   - Release a button that was held
-# STICK <stick> <x> <y> - Move analog stick (l or r, coordinates -1.0 to 1.0)  
-# SLEEP <seconds>    - Wait for specified time
-# LOOP <count>       - Start a loop (repeat commands until ENDLOOP)
-# ENDLOOP           - End a loop
-# 
-# Example:
-# PRESS a
-# SLEEP 0.5
-# HOLD r     # Hold R button
-# PRESS b    # Press B while holding R
-# RELEASE r  # Release R button
-# LOOP 3
-#   STICK l 0.0 1.0
-#   SLEEP 0.1
-# ENDLOOP"></textarea>
-          <textarea id="mobile-fallback-editor" class="mobile-fallback-editor"></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="save_macro" class="success"><i class="fas fa-save"></i> Save</button>
-        <button id="cancel_edit" class="secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Settings Modal -->
-  <div id="settings-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2><i class="fas fa-cog"></i> Settings</h2>
-        <button class="modal-close" id="settings-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <!-- Alert Configuration -->
-        <div class="settings-section">
-          <h3><i class="fas fa-bell"></i> Notifications</h3>
-          <div class="form-group">
-            <label for="alert_interval">Interval (0 = off):</label>
-            <div class="input-with-unit">
-              <input type="number" id="alert_interval" value="0" min="0" max="10000" step="1" style="width: 80px;">
-              <small>iterations</small>
+                <!-- Logs Panel -->
+                <section class="panel logs-panel">
+                    <h2>
+                        <span>Live Logs</span>
+                        <button onclick="app.clearLogs()" class="small secondary">Clear</button>
+                    </h2>
+                    <div class="logs-container" id="logsContainer">
+                        <div class="log-entry">Connecting to server...</div>
+                    </div>
+                </section>
             </div>
-          </div>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="enable_notifications" checked> Browser alerts
-            </label>
-          </div>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="enable_sound" checked> Sound effects
-            </label>
-          </div>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="pause_on_alert"> Pause on alert
-            </label>
-          </div>
-          <button id="set_alerts"><i class="fas fa-save"></i> Apply</button>
-        </div>
-
-        <!-- Metrics Configuration -->
-        <div class="settings-section">
-          <h3><i class="fas fa-chart-bar"></i> Metrics</h3>
-          <div class="form-group">
-            <p>Reset iteration count and runtime back to zero:</p>
-            <button id="reset_metrics" class="danger"><i class="fas fa-undo"></i> Reset Metrics</button>
-          </div>
-        </div>
-
-        <!-- Adapter Configuration -->
-        <div class="settings-section">
-          <h3><i class="fas fa-plug"></i> Adapter</h3>
-          <div class="form-group">
-            <label for="adapter_select">Controller Type:</label>
-            <select id="adapter_select">
-              <option value="">Auto-detect (Pico first)</option>
-              <option value="pico">Pico W (USB Serial)</option>
-              <option value="joycontrol">Joycontrol (Bluetooth)</option>
-            </select>
-          </div>
-          <div class="adapter-status">
-            <div class="status-item">
-              <span class="status-label">Adapter:</span>
-              <span class="status-value" id="adapter_status">Checking...</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">Console:</span>
-              <span class="status-value" id="console_status">Checking connection...</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">Status:</span>
-              <span class="status-value" id="macro_status">Ready</span>
-            </div>
-          </div>
-          <div class="button-group">
-            <button id="set_adapter"><i class="fas fa-check"></i> Apply</button>
-            <button id="test_adapters"><i class="fas fa-search"></i> Test</button>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="settings_save" class="success"><i class="fas fa-check"></i> Close</button>
-      </div>
+        </main>
     </div>
-  </div>
+
+    <!-- Macro Editor Modal -->
+    <div class="modal" id="editorModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="editorTitle">Edit Macro</h2>
+                <button onclick="app.closeEditor()" class="small secondary">✕</button>
+            </div>
+            <div class="modal-body">
+                <div>
+                    <label for="macroName">Filename</label>
+                    <input type="text" id="macroName" placeholder="my_macro.txt">
+                </div>
+                <div class="editor-container">
+                    <textarea id="macroEditor" placeholder="# Enter macro commands here&#10;# Example:&#10;Button A&#10;Wait 500&#10;Button B&#10;Wait 500"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="app.closeEditor()" class="secondary">Cancel</button>
+                <button onclick="app.saveMacro()" class="success">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
 </body>
 </html>
