@@ -19,8 +19,6 @@ class AutoshineApp {
         // DOM elements
         this.elements = {
             macroList: document.getElementById('macroList'),
-            currentMacro: document.getElementById('currentMacro'),
-            picoCount: document.getElementById('picoCount'),
             picoDevices: document.getElementById('picoDevices'),
             logsContainer: document.getElementById('logsContainer'),
             editorModal: document.getElementById('editorModal'),
@@ -158,8 +156,6 @@ class AutoshineApp {
     }
     
     renderDevices() {
-        this.elements.picoCount.textContent = this.devices.length;
-        
         if (this.devices.length === 0) {
             this.elements.picoDevices.innerHTML = `
                 <div style="color: var(--text-secondary); text-align: center; padding: 0.5rem;">
@@ -300,7 +296,6 @@ class AutoshineApp {
         this.selectedMacro = name;
         this.renderMacroList();
         this.updateButtonStates();
-        this.elements.currentMacro.textContent = name;
         this.log(`Selected macro: ${name}`, 'info');
     }
     
