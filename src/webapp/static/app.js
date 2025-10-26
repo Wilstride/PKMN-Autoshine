@@ -11,7 +11,7 @@ class AutoshineApp {
         this.macros = [];
         this.selectedMacro = null;
         this.devices = [];
-        this.selectedDevice = null;  // null = all devices
+        this.selectedDevice = null;  // null = no device selected
         this.ws = null;
         this.isEditing = false;
         this.editingMacro = null;
@@ -21,7 +21,6 @@ class AutoshineApp {
             macroList: document.getElementById('macroList'),
             currentMacro: document.getElementById('currentMacro'),
             picoCount: document.getElementById('picoCount'),
-            targetDevice: document.getElementById('targetDevice'),
             picoDevices: document.getElementById('picoDevices'),
             logsContainer: document.getElementById('logsContainer'),
             editorModal: document.getElementById('editorModal'),
@@ -35,12 +34,6 @@ class AutoshineApp {
             deleteBtn: document.getElementById('deleteBtn')
         };
         
-        // Listen for target device changes
-        this.elements.targetDevice.addEventListener('change', (e) => {
-            this.selectedDevice = e.target.value || null;
-            this.log(`Target: ${this.selectedDevice ? this.selectedDevice : 'All devices'}`, 'info');
-        });
-        
         // Initialize
         this.init();
     }
@@ -51,7 +44,27 @@ class AutoshineApp {
         await this.loadDevices();
         this.connectWebSocket();
         this.setupKeyboardShortcuts();
+        this.setupVisibilityHandler();
         this.startDeviceStatusPolling();
+    }
+    
+    setupVisibilityHandler() {
+        // Handle mobile hibernation/wake - reconnect WebSocket and refresh when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // Page became visible again
+                this.log('Page resumed, refreshing connection...', 'info');
+                
+                // Reconnect WebSocket if disconnected
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    this.connectWebSocket();
+                }
+                
+                // Refresh devices and macros
+                this.loadDevices(true);
+                this.loadMacros();
+            }
+        });
     }
     
     startDeviceStatusPolling() {
@@ -134,7 +147,6 @@ class AutoshineApp {
             const data = await response.json();
             this.devices = data.devices;
             this.renderDevices();
-            this.updateDeviceSelect();
             
             if (data.new_connections > 0) {
                 this.log(`✓ Found ${data.new_connections} new device(s)`, 'success');
@@ -155,6 +167,8 @@ class AutoshineApp {
                     No devices connected. Click refresh to scan.
                 </div>
             `;
+            this.selectedDevice = null;
+            this.updateButtonStates();
             return;
         }
         
@@ -177,9 +191,19 @@ class AutoshineApp {
                     break;
             }
             
+            const isSelected = this.selectedDevice === device.port;
+            
             return `
-                <div style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                <div style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; border: 1px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-color)'}; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
+                        <input 
+                            type="radio" 
+                            name="targetDevice" 
+                            value="${this.escapeHtml(device.port)}"
+                            ${isSelected ? 'checked' : ''}
+                            onchange="app.selectDevice('${this.escapeHtml(device.port)}')"
+                            style="cursor: pointer; width: 16px; height: 16px; margin: 0;"
+                            title="Select as target device">
                         <span 
                             id="name-${this.escapeHtml(device.port)}" 
                             style="font-weight: 500; color: var(--accent-primary); white-space: nowrap; cursor: pointer;" 
@@ -210,23 +234,22 @@ class AutoshineApp {
                 </div>
             `;
         }).join('');
+        
+        // Validate that selectedDevice still exists
+        if (this.selectedDevice && !this.devices.some(d => d.port === this.selectedDevice)) {
+            this.selectedDevice = null;
+        }
+        
+        this.updateButtonStates();
     }
     
-    updateDeviceSelect() {
-        const currentValue = this.elements.targetDevice.value;
-        
-        this.elements.targetDevice.innerHTML = '<option value="">All Devices</option>' + 
-            this.devices.map(device => 
-                `<option value="${this.escapeHtml(device.port)}">${this.escapeHtml(device.name)} (${this.escapeHtml(device.port)})</option>`
-            ).join('');
-        
-        // Restore previous selection if it still exists
-        if (currentValue) {
-            const exists = this.devices.some(d => d.port === currentValue);
-            if (exists) {
-                this.elements.targetDevice.value = currentValue;
-            }
-        }
+    selectDevice(port) {
+        this.selectedDevice = port;
+        const device = this.devices.find(d => d.port === port);
+        const deviceName = device ? device.name : port;
+        this.log(`Target: ${deviceName}`, 'info');
+        this.renderDevices();
+        this.updateButtonStates();
     }
     
     handleWebSocketMessage(data) {
@@ -401,20 +424,16 @@ class AutoshineApp {
             return;
         }
         
-        if (this.devices.length === 0) {
-            this.log('No Pico devices connected', 'warning');
+        if (!this.selectedDevice) {
+            this.log('No device selected', 'warning');
             return;
         }
         
         try {
             const body = {
-                name: this.selectedMacro
+                name: this.selectedMacro,
+                port: this.selectedDevice
             };
-            
-            // Add port if targeting specific device
-            if (this.selectedDevice) {
-                body.port = this.selectedDevice;
-            }
             
             const response = await fetch('/api/upload', {
                 method: 'POST',
@@ -427,11 +446,10 @@ class AutoshineApp {
                 throw new Error(error);
             }
             
-            const target = this.selectedDevice ? 
-                this.devices.find(d => d.port === this.selectedDevice)?.name || this.selectedDevice :
-                'all devices';
+            const device = this.devices.find(d => d.port === this.selectedDevice);
+            const deviceName = device ? device.name : this.selectedDevice;
             
-            this.log(`📤 Uploaded '${this.selectedMacro}' to ${target}`, 'success');
+            this.log(`📤 Uploaded '${this.selectedMacro}' to ${deviceName}`, 'success');
             
             // Refresh device status to show current macro
             setTimeout(() => this.loadDevices(), 500);
@@ -443,36 +461,27 @@ class AutoshineApp {
     }
     
     async runMacro() {
-        if (!this.selectedMacro) {
-            this.log('No macro selected', 'warning');
-            return;
-        }
-        
-        if (this.devices.length === 0) {
-            this.log('No Pico devices connected', 'warning');
+        if (!this.selectedDevice) {
+            this.log('No device selected', 'warning');
             return;
         }
         
         try {
             // Send START_MACRO command to run continuously
             const body = {
-                command: 'START_MACRO'
+                command: 'START_MACRO',
+                port: this.selectedDevice
             };
-            
-            if (this.selectedDevice) {
-                body.port = this.selectedDevice;
-            }
             
             // Send via WebSocket for real-time execution
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify(body));
             }
             
-            const target = this.selectedDevice ? 
-                this.devices.find(d => d.port === this.selectedDevice)?.name || this.selectedDevice :
-                'all devices';
+            const device = this.devices.find(d => d.port === this.selectedDevice);
+            const deviceName = device ? device.name : this.selectedDevice;
             
-            this.log(`▶️ Running macro on ${target} (continuous)`, 'success');
+            this.log(`▶️ Running macro on ${deviceName} (continuous)`, 'success');
             
             this.updateButtonStates();
         } catch (error) {
@@ -481,25 +490,26 @@ class AutoshineApp {
     }
     
     async stopMacro() {
+        if (!this.selectedDevice) {
+            this.log('No device selected', 'warning');
+            return;
+        }
+        
         try {
             const body = {
-                command: 'STOP_MACRO'
+                command: 'STOP_MACRO',
+                port: this.selectedDevice
             };
-            
-            if (this.selectedDevice) {
-                body.port = this.selectedDevice;
-            }
             
             // Send via WebSocket
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify(body));
             }
             
-            const target = this.selectedDevice ? 
-                this.devices.find(d => d.port === this.selectedDevice)?.name || this.selectedDevice :
-                'all devices';
+            const device = this.devices.find(d => d.port === this.selectedDevice);
+            const deviceName = device ? device.name : this.selectedDevice;
             
-            this.log(`⏹️ Stopped macro on ${target}`, 'info');
+            this.log(`⏹️ Stopped macro on ${deviceName}`, 'info');
             
             this.updateButtonStates();
         } catch (error) {
@@ -561,7 +571,6 @@ class AutoshineApp {
             // Update local device list
             device.name = data.name;
             this.renderDevices();
-            this.updateDeviceSelect();
             
             if (newName) {
                 this.log(`✓ Set nickname to "${data.name}"`, 'success');
@@ -603,12 +612,20 @@ class AutoshineApp {
     updateButtonStates() {
         const hasSelection = this.selectedMacro !== null;
         const hasDevices = this.devices.length > 0;
+        const hasDeviceSelected = this.selectedDevice !== null;
         
+        // Edit and Delete require a macro selection
         this.elements.editBtn.disabled = !hasSelection;
         this.elements.deleteBtn.disabled = !hasSelection;
-        this.elements.uploadBtn.disabled = !hasSelection || !hasDevices;
-        this.elements.runBtn.disabled = !hasSelection || !hasDevices;
-        this.elements.stopBtn.disabled = !hasDevices;
+        
+        // Upload requires both a macro AND a device to be selected
+        this.elements.uploadBtn.disabled = !hasSelection || !hasDeviceSelected;
+        
+        // Run requires a device to be selected (macro is optional since device might have one already)
+        this.elements.runBtn.disabled = !hasDeviceSelected;
+        
+        // Stop only requires a device to be selected
+        this.elements.stopBtn.disabled = !hasDeviceSelected;
     }
     
     formatTime(seconds) {

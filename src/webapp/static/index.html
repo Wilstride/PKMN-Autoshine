@@ -44,14 +44,6 @@
                         <div class="status-label">Connected Picos</div>
                         <div class="status-value" id="picoCount">0</div>
                     </div>
-                    <div class="status-item">
-                        <div class="status-label">Target Device</div>
-                        <div class="status-value">
-                            <select id="targetDevice" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.25rem; border-radius: 4px;">
-                                <option value="">All Devices</option>
-                            </select>
-                        </div>
-                    </div>
                 </section>
 
                 <!-- Pico Devices Panel -->
@@ -110,7 +102,12 @@
                     <input type="text" id="macroName" placeholder="my_macro.txt">
                 </div>
                 <div class="editor-container">
-                    <textarea id="macroEditor" placeholder="# Enter macro commands here&#10;# Example:&#10;Button A&#10;Wait 500&#10;Button B&#10;Wait 500"></textarea>
+                    <textarea id="macroEditor" 
+                              placeholder="# Enter macro commands here&#10;# Example:&#10;Button A&#10;Wait 500&#10;Button B&#10;Wait 500"
+                              autocomplete="off" 
+                              autocorrect="off" 
+                              autocapitalize="off" 
+                              spellcheck="false"></textarea>
                 </div>
             </div>
             <div class="modal-footer">

@@ -397,6 +397,16 @@ textarea:focus {
     outline: none;
 }
 
+/* Radio Buttons */
+input[type="radio"] {
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+}
+
+input[type="radio"]:hover {
+    filter: brightness(1.2);
+}
+
 /* Scrollbar Styles */
 ::-webkit-scrollbar {
     width: 8px;
