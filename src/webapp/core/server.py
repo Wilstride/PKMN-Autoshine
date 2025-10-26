@@ -31,6 +31,7 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_get('/api/pico/devices', handlers.list_devices)
     app.router.add_post('/api/pico/refresh', handlers.refresh_devices)
     app.router.add_get('/api/pico/status', handlers.get_pico_status)
+    app.router.add_post('/api/pico/nickname', handlers.set_device_nickname)
     
     # Macro management
     app.router.add_get('/api/macros', handlers.list_macros)

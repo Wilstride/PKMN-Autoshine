@@ -79,12 +79,21 @@ class PicoDevice:
     def __init__(self, port: str, name: str = None):
         self.port = port
         self.name = name or port.split('/')[-1]  # e.g., "ttyACM0"
+        self.default_name = self.name  # Store default name
         self.serial: Optional[serial.Serial] = None
         self.connected = False
         self.current_macro: Optional[str] = None
         self.is_uploading = False  # Track if macro is being uploaded
         self.iteration_count = 0  # Track macro iteration count
         self.bt_status = 'disconnected'  # Bluetooth status: 'disconnected', 'pairing', 'connected'
+    
+    def set_nickname(self, nickname: str) -> None:
+        """Set a custom nickname for this device."""
+        if nickname and nickname.strip():
+            self.name = nickname.strip()
+        else:
+            # Reset to default name if empty
+            self.name = self.default_name
     
     def connect(self) -> bool:
         """Connect to this Pico device."""

@@ -180,7 +180,13 @@ class AutoshineApp {
             return `
                 <div style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
-                        <div style="font-weight: 500; color: var(--accent-primary); white-space: nowrap;">${this.escapeHtml(device.name)}</div>
+                        <span 
+                            id="name-${this.escapeHtml(device.port)}" 
+                            style="font-weight: 500; color: var(--accent-primary); white-space: nowrap; cursor: pointer;" 
+                            onclick="app.editDeviceName('${this.escapeHtml(device.port)}')"
+                            title="Click to edit nickname">
+                            ${this.escapeHtml(device.name)}
+                        </span>
                         <span style="color: ${btColor}; font-size: 1rem;" title="${btLabel}">●</span>
                         ${device.is_uploading ? 
                             '<span style="color: var(--warning);">⏳ Uploading</span>' :
@@ -522,6 +528,48 @@ class AutoshineApp {
             this.log(`🔗 Pairing mode enabled on ${deviceName}. Go to Switch Settings > Controllers > Change Grip/Order to pair.`, 'success');
         } catch (error) {
             this.log(`Error enabling pairing: ${error.message}`, 'error');
+        }
+    }
+    
+    async editDeviceName(port) {
+        const device = this.devices.find(d => d.port === port);
+        if (!device) return;
+        
+        const currentName = device.name;
+        const newName = prompt(`Enter nickname for device (leave empty to reset):`, currentName);
+        
+        // User cancelled
+        if (newName === null) return;
+        
+        try {
+            const response = await fetch('/api/pico/nickname', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    port: port,
+                    nickname: newName 
+                })
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to set nickname');
+            }
+            
+            const data = await response.json();
+            
+            // Update local device list
+            device.name = data.name;
+            this.renderDevices();
+            this.updateDeviceSelect();
+            
+            if (newName) {
+                this.log(`✓ Set nickname to "${data.name}"`, 'success');
+            } else {
+                this.log(`✓ Reset nickname to default`, 'success');
+            }
+        } catch (error) {
+            this.log(`Error setting nickname: ${error.message}`, 'error');
         }
     }
     

@@ -159,6 +159,37 @@ async def get_pico_status(request: web.Request) -> web.Response:
     })
 
 
+async def set_device_nickname(request: web.Request) -> web.Response:
+    """Set a nickname for a specific Pico device."""
+    try:
+        data = await request.json()
+        port = data.get('port')
+        nickname = data.get('nickname', '')
+        
+        if not port:
+            return web.Response(status=400, text='port required')
+        
+        device = pico_manager.get_device(port)
+        if not device:
+            return web.Response(status=404, text=f'Device {port} not found')
+        
+        device.set_nickname(nickname)
+        
+        if nickname:
+            log_message(f"Set nickname '{nickname}' for {device.default_name}", 'info')
+        else:
+            log_message(f"Cleared nickname for {device.default_name}", 'info')
+        
+        return web.json_response({
+            'status': 'ok',
+            'name': device.name,
+            'port': port
+        })
+    except Exception as e:
+        log_message(f"Error setting nickname: {e}", 'error')
+        return web.Response(status=500, text=str(e))
+
+
 # ===== Macro Management Handlers =====
 
 async def list_macros(request: web.Request) -> web.Response:

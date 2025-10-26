@@ -28,10 +28,23 @@ class PicoManager:
         return pico_ports
     
     def connect_all(self) -> int:
-        """Discover and connect to all available Pico devices."""
+        """Discover and connect to all available Pico devices. Also removes disconnected devices."""
         discovered = self.discover_devices()
         connected_count = 0
         
+        # Remove devices that are no longer physically present
+        ports_to_remove = []
+        for port in list(self.devices.keys()):
+            if port not in discovered:
+                ports_to_remove.append(port)
+        
+        for port in ports_to_remove:
+            device = self.devices[port]
+            device.disconnect()
+            del self.devices[port]
+            self.logger(f"✗ Removed disconnected device: {device.name} ({port})")
+        
+        # Connect to discovered devices
         for port in discovered:
             if port not in self.devices:
                 device = PicoDevice(port)
@@ -90,3 +103,20 @@ class PicoManager:
         """Poll all connected devices to read and process their serial buffers."""
         for device in self.get_connected_devices():
             device.poll_serial_buffer()
+    
+    def cleanup_disconnected_devices(self) -> int:
+        """Remove devices that are no longer physically present. Returns number of devices removed."""
+        discovered = self.discover_devices()
+        ports_to_remove = []
+        
+        for port in list(self.devices.keys()):
+            if port not in discovered:
+                ports_to_remove.append(port)
+        
+        for port in ports_to_remove:
+            device = self.devices[port]
+            device.disconnect()
+            del self.devices[port]
+            self.logger(f"✗ Cleaned up disconnected device: {device.name} ({port})")
+        
+        return len(ports_to_remove)
