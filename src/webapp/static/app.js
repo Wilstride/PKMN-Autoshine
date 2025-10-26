@@ -51,6 +51,16 @@ class AutoshineApp {
         await this.loadDevices();
         this.connectWebSocket();
         this.setupKeyboardShortcuts();
+        this.startDeviceStatusPolling();
+    }
+    
+    startDeviceStatusPolling() {
+        // Poll device status every 2 seconds to update iteration counts
+        setInterval(async () => {
+            if (this.devices.length > 0) {
+                await this.loadDevices(true);  // silent mode
+            }
+        }, 2000);
     }
     
     // ===== WebSocket Management =====
@@ -103,8 +113,17 @@ class AutoshineApp {
         }
     }
     
-    async loadDevices() {
-        await this.checkPicoStatus();
+    async loadDevices(silent = false) {
+        try {
+            await this.checkPicoStatus();
+            if (!silent) {
+                // Only log on explicit user action, not during polling
+            }
+        } catch (error) {
+            if (!silent) {
+                this.log(`Error loading devices: ${error.message}`, 'error');
+            }
+        }
     }
     
     async refreshDevices() {
@@ -147,13 +166,20 @@ class AutoshineApp {
                         <div style="font-size: 0.8rem; color: var(--text-secondary);">${this.escapeHtml(device.port)}</div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        ${device.connected ? 
-                            '<span style="color: var(--success); font-size: 0.8rem;">● Connected</span>' : 
-                            '<span style="color: var(--danger); font-size: 0.8rem;">● Disconnected</span>'}
+                        ${device.is_uploading ? 
+                            '<span style="color: var(--warning); font-size: 0.8rem;">⏳ Uploading...</span>' :
+                            device.connected ? 
+                                '<span style="color: var(--success); font-size: 0.8rem;">● Connected</span>' : 
+                                '<span style="color: var(--danger); font-size: 0.8rem;">● Disconnected</span>'}
                     </div>
                 </div>
                 ${device.current_macro ? 
-                    `<div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Running: ${this.escapeHtml(device.current_macro)}</div>` : 
+                    `<div style="margin-top: 0.5rem; font-size: 0.8rem;">
+                        <span style="color: var(--text-secondary);">Running: ${this.escapeHtml(device.current_macro)}</span>
+                        ${device.iteration_count > 0 ? 
+                            `<span style="color: var(--accent-primary); margin-left: 0.5rem;">Iteration: ${device.iteration_count}</span>` : 
+                            ''}
+                    </div>` : 
                     ''}
             </div>
         `).join('');

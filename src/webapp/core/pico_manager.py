@@ -85,3 +85,8 @@ class PicoManager:
             if device.send_macro(macro_content):
                 success_count += 1
         return success_count
+    
+    def poll_all_devices(self) -> None:
+        """Poll all connected devices to read and process their serial buffers."""
+        for device in self.get_connected_devices():
+            device.poll_serial_buffer()

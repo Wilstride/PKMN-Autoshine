@@ -43,6 +43,19 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_post('/api/upload', handlers.upload_macro)
 
 
+async def poll_serial_buffers(pico_manager: PicoManager) -> None:
+    """Background task to poll all Pico serial buffers every 100ms."""
+    while True:
+        try:
+            pico_manager.poll_all_devices()
+            await asyncio.sleep(0.1)  # 100ms polling interval
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"Error in serial buffer polling: {e}")
+            await asyncio.sleep(0.1)
+
+
 async def on_startup(app: web.Application) -> None:
     """Initialize services on server startup."""
     print("🎮 Starting PKMN-Autoshine Multi-Pico Server...")
@@ -57,12 +70,24 @@ async def on_startup(app: web.Application) -> None:
     for device in app['pico_manager'].get_all_devices():
         print(f"   - {device.name} ({device.port})")
     
+    # Start background serial buffer polling (100ms intervals)
+    app['polling_task'] = asyncio.create_task(poll_serial_buffers(app['pico_manager']))
+    print("📡 Serial buffer polling started (100ms interval)")
+    
     print(f"📁 Macros: {MACROS_DIR}")
 
 
 async def on_shutdown(app: web.Application) -> None:
     """Cleanup on server shutdown."""
     print("\n🛑 Shutting down server...")
+    
+    # Cancel serial buffer polling
+    if 'polling_task' in app:
+        app['polling_task'].cancel()
+        try:
+            await app['polling_task']
+        except asyncio.CancelledError:
+            pass
     
     # Cancel log broadcaster
     if 'log_broadcast_task' in app:

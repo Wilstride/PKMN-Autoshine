@@ -82,6 +82,8 @@ class PicoDevice:
         self.serial: Optional[serial.Serial] = None
         self.connected = False
         self.current_macro: Optional[str] = None
+        self.is_uploading = False  # Track if macro is being uploaded
+        self.iteration_count = 0  # Track macro iteration count
     
     def connect(self) -> bool:
         """Connect to this Pico device."""
@@ -110,11 +112,22 @@ class PicoDevice:
                 pass
             self.connected = False
     
-    def send_command(self, cmd: str) -> bool:
-        """Send command to this Pico."""
+    def send_command(self, cmd: str, allow_during_upload: bool = False) -> bool:
+        """Send command to this Pico.
+        
+        Args:
+            cmd: Command to send
+            allow_during_upload: If True, allow command even during macro upload
+        """
         if not self.connected or not self.serial:
             print(f"Cannot send command to {self.port}: not connected")
             return False
+        
+        # Block commands during macro upload (unless explicitly allowed)
+        if self.is_uploading and not allow_during_upload:
+            print(f"[{self.name}] Command blocked: macro upload in progress")
+            return False
+        
         try:
             command_bytes = (cmd + '\n').encode('utf-8')
             self.serial.write(command_bytes)
@@ -126,6 +139,7 @@ class PicoDevice:
                 response = self.serial.readline().decode('utf-8', errors='ignore').strip()
                 if response:
                     print(f"[{self.name}] Response: {response}")
+                    self._process_response(response)
             
             return True
         except Exception as e:
@@ -139,6 +153,9 @@ class PicoDevice:
             print(f"Cannot upload macro to {self.port}: not connected")
             return False
         
+        # Set upload flag to block other commands
+        self.is_uploading = True
+        
         try:
             print(f"\n[{self.name}] Starting macro upload...")
             
@@ -149,27 +166,27 @@ class PicoDevice:
             # 2. Convert SLEEP from seconds to frames (if float)
             processed_content = convert_sleep_to_frames(processed_content)
             
-            # 3. Stop any running macro first
-            self.send_command("STOP_MACRO")
+            # 3. Stop any running macro first (allow during upload)
+            self.send_command("STOP_MACRO", allow_during_upload=True)
             time.sleep(0.1)
             
-            # 4. Start macro loading sequence
-            self.send_command("LOAD_MACRO_START")
+            # 4. Start macro loading sequence (allow during upload)
+            self.send_command("LOAD_MACRO_START", allow_during_upload=True)
             time.sleep(0.05)
             
-            # 5. Send macro content line by line
+            # 5. Send macro content line by line (allow during upload)
             lines_sent = 0
             for line in processed_content.split('\n'):
                 line = line.strip()
                 if line:  # Send all non-empty lines (firmware filters comments)
-                    self.send_command(line)
+                    self.send_command(line, allow_during_upload=True)
                     lines_sent += 1
             
             print(f"[{self.name}] Sent {lines_sent} lines")
             time.sleep(0.05)
             
-            # 6. Complete the macro loading
-            self.send_command("LOAD_MACRO_END")
+            # 6. Complete the macro loading (allow during upload)
+            self.send_command("LOAD_MACRO_END", allow_during_upload=True)
             time.sleep(0.2)  # Give firmware time to process
             
             # 7. Read all responses to check for success
@@ -189,12 +206,17 @@ class PicoDevice:
             else:
                 print(f"[{self.name}] Warning: No success confirmation received")
             
+            # Clear upload flag
+            self.is_uploading = False
+            
             return True  # Return True even without confirmation (firmware may not always respond)
             
         except Exception as e:
             print(f"Error sending macro to {self.port}: {e}")
             import traceback
             traceback.print_exc()
+            # Clear upload flag on error
+            self.is_uploading = False
             return False
     
     def read_response(self, timeout: float = 0.5) -> list:
@@ -218,11 +240,43 @@ class PicoDevice:
         
         return responses
     
+    def poll_serial_buffer(self) -> None:
+        """Poll and empty the serial buffer, processing any responses."""
+        if not self.connected or not self.serial:
+            return
+        
+        try:
+            # Read all available data from the buffer
+            while self.serial.in_waiting:
+                line = self.serial.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    # Process the line for important information
+                    self._process_response(line)
+        except Exception as e:
+            # Silent fail - don't spam errors during polling
+            pass
+    
+    def _process_response(self, response: str) -> None:
+        """Process a response line from the firmware."""
+        # Track iteration count from firmware responses
+        if 'ITERATION_COMPLETE:' in response:
+            try:
+                self.iteration_count = int(response.split(':')[1])
+                print(f"[{self.name}] Iteration: {self.iteration_count}")
+            except:
+                pass
+        
+        # Log other important responses
+        if any(keyword in response for keyword in ['successfully', 'failed', 'error', 'loaded']):
+            print(f"[{self.name}] {response}")
+    
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
             'port': self.port,
             'name': self.name,
             'connected': self.connected,
-            'current_macro': self.current_macro
+            'current_macro': self.current_macro,
+            'is_uploading': self.is_uploading,
+            'iteration_count': self.iteration_count
         }
