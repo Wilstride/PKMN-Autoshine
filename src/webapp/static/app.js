@@ -151,7 +151,7 @@ class AutoshineApp {
         
         if (this.devices.length === 0) {
             this.elements.picoDevices.innerHTML = `
-                <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">
+                <div style="color: var(--text-secondary); text-align: center; padding: 0.5rem;">
                     No devices connected. Click refresh to scan.
                 </div>
             `;
@@ -159,27 +159,20 @@ class AutoshineApp {
         }
         
         this.elements.picoDevices.innerHTML = this.devices.map(device => `
-            <div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 4px; border: 1px solid var(--border-color);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-weight: 500; color: var(--accent-primary);">${this.escapeHtml(device.name)}</div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">${this.escapeHtml(device.port)}</div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        ${device.is_uploading ? 
-                            '<span style="color: var(--warning); font-size: 0.8rem;">⏳ Uploading...</span>' :
-                            device.connected ? 
-                                '<span style="color: var(--success); font-size: 0.8rem;">● Connected</span>' : 
-                                '<span style="color: var(--danger); font-size: 0.8rem;">● Disconnected</span>'}
-                    </div>
+            <div style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
+                    <div style="font-weight: 500; color: var(--accent-primary); white-space: nowrap;">${this.escapeHtml(device.name)}</div>
+                    ${device.is_uploading ? 
+                        '<span style="color: var(--warning);">⏳ Uploading</span>' :
+                        device.connected ? 
+                            '<span style="color: var(--success);">●</span>' : 
+                            '<span style="color: var(--danger);">●</span>'}
+                    ${device.current_macro ? 
+                        `<span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(device.current_macro)}</span>` : 
+                        '<span style="color: var(--text-secondary);">Idle</span>'}
                 </div>
-                ${device.current_macro ? 
-                    `<div style="margin-top: 0.5rem; font-size: 0.8rem;">
-                        <span style="color: var(--text-secondary);">Running: ${this.escapeHtml(device.current_macro)}</span>
-                        ${device.iteration_count > 0 ? 
-                            `<span style="color: var(--accent-primary); margin-left: 0.5rem;">Iteration: ${device.iteration_count}</span>` : 
-                            ''}
-                    </div>` : 
+                ${device.iteration_count > 0 ? 
+                    `<div style="color: var(--accent-primary); font-weight: 500; white-space: nowrap; margin-left: 0.5rem;">#${device.iteration_count}</div>` : 
                     ''}
             </div>
         `).join('');
