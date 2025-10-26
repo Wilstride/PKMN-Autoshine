@@ -84,6 +84,7 @@ class PicoDevice:
         self.current_macro: Optional[str] = None
         self.is_uploading = False  # Track if macro is being uploaded
         self.iteration_count = 0  # Track macro iteration count
+        self.bt_status = 'disconnected'  # Bluetooth status: 'disconnected', 'pairing', 'connected'
     
     def connect(self) -> bool:
         """Connect to this Pico device."""
@@ -266,6 +267,21 @@ class PicoDevice:
             except:
                 pass
         
+        # Track Bluetooth status using explicit status messages
+        if 'BT_STATUS:' in response:
+            if 'PAIRING_ENABLED' in response:
+                self.bt_status = 'pairing'
+                print(f"[{self.name}] BT Status: Pairing mode")
+            elif 'PAIRING_DISABLED' in response:
+                self.bt_status = 'disconnected'
+                print(f"[{self.name}] BT Status: Pairing disabled")
+            elif 'CONNECTION_OPENED' in response:
+                self.bt_status = 'connected'
+                print(f"[{self.name}] BT Status: Connected to Switch")
+            elif 'CONNECTION_CLOSED' in response:
+                self.bt_status = 'disconnected'
+                print(f"[{self.name}] BT Status: Disconnected from Switch")
+        
         # Log other important responses
         if any(keyword in response for keyword in ['successfully', 'failed', 'error', 'loaded']):
             print(f"[{self.name}] {response}")
@@ -278,5 +294,6 @@ class PicoDevice:
             'connected': self.connected,
             'current_macro': self.current_macro,
             'is_uploading': self.is_uploading,
-            'iteration_count': self.iteration_count
+            'iteration_count': self.iteration_count,
+            'bt_status': self.bt_status  # 'disconnected', 'pairing', 'connected'
         }

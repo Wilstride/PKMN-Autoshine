@@ -158,34 +158,52 @@ class AutoshineApp {
             return;
         }
         
-        this.elements.picoDevices.innerHTML = this.devices.map(device => `
-            <div style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
-                <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
-                    <div style="font-weight: 500; color: var(--accent-primary); white-space: nowrap;">${this.escapeHtml(device.name)}</div>
-                    ${device.is_uploading ? 
-                        '<span style="color: var(--warning);">⏳ Uploading</span>' :
-                        device.connected ? 
-                            '<span style="color: var(--success);">●</span>' : 
-                            '<span style="color: var(--danger);">●</span>'}
-                    ${device.current_macro ? 
-                        `<span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(device.current_macro)}</span>` : 
-                        '<span style="color: var(--text-secondary);">Idle</span>'}
+        this.elements.picoDevices.innerHTML = this.devices.map(device => {
+            // Determine Bluetooth status color and label
+            let btColor, btLabel;
+            switch(device.bt_status) {
+                case 'connected':
+                    btColor = '#4ade80';  // Green
+                    btLabel = 'BT Connected';
+                    break;
+                case 'pairing':
+                    btColor = '#60a5fa';  // Blue
+                    btLabel = 'BT Pairing';
+                    break;
+                case 'disconnected':
+                default:
+                    btColor = '#ef4444';  // Red
+                    btLabel = 'BT Disconnected';
+                    break;
+            }
+            
+            return `
+                <div style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
+                        <div style="font-weight: 500; color: var(--accent-primary); white-space: nowrap;">${this.escapeHtml(device.name)}</div>
+                        <span style="color: ${btColor}; font-size: 1rem;" title="${btLabel}">●</span>
+                        ${device.is_uploading ? 
+                            '<span style="color: var(--warning);">⏳ Uploading</span>' :
+                            device.current_macro ? 
+                                `<span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(device.current_macro)}</span>` : 
+                                '<span style="color: var(--text-secondary);">Idle</span>'}
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        ${device.iteration_count > 0 ? 
+                            `<div style="color: var(--accent-primary); font-weight: 500; white-space: nowrap;">#${device.iteration_count}</div>` : 
+                            ''}
+                        <button 
+                            onclick="app.enablePairing('${this.escapeHtml(device.port)}')" 
+                            class="small secondary" 
+                            style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                            ${!device.connected ? 'disabled' : ''}
+                            title="Enable pairing mode on this device">
+                            🔗 Pair
+                        </button>
+                    </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    ${device.iteration_count > 0 ? 
-                        `<div style="color: var(--accent-primary); font-weight: 500; white-space: nowrap;">#${device.iteration_count}</div>` : 
-                        ''}
-                    <button 
-                        onclick="app.enablePairing('${this.escapeHtml(device.port)}')" 
-                        class="small secondary" 
-                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
-                        ${!device.connected ? 'disabled' : ''}
-                        title="Enable pairing mode on this device">
-                        🔗 Pair
-                    </button>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
     
     updateDeviceSelect() {
